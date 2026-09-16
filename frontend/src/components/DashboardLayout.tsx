@@ -9,6 +9,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const navItems = [
     { label: 'Dashboard', path: '/admin', roles: ['administrator'] },
     { label: 'Queue', path: '/admin/queue', roles: ['administrator', 'municipal_officer'] },
+    { label: 'Operations Map', path: '/admin/map', roles: ['administrator'] },
     { label: 'Users', path: '/admin/users', roles: ['administrator'] },
     { label: 'Audit Logs', path: '/admin/audit', roles: ['administrator'] },
   ]

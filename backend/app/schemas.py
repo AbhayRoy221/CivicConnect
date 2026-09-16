@@ -154,11 +154,61 @@ class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    complaint_id: UUID | None
+    complaint_id: UUID | None = None
     title: str
     message: str
     is_read: bool
     created_at: datetime
+
+
+class LeaderboardUser(BaseModel):
+    id: UUID
+    name: str
+    points: int
+
+
+class LeaderboardResponse(BaseModel):
+    top_users: list[LeaderboardUser]
+
+
+class MapComplaintResponse(BaseModel):
+    id: UUID
+    public_id: str
+    latitude: float
+    longitude: float
+    category_name: str | None
+    severity: Severity
+    status: ComplaintStatus
+    geographic_ward_number: int | None
+    administrative_ward_name: str | None
+    administrative_zone: str | None
+    authority: Authority | None
+    department_name: str | None
+    officer_name: str | None
+
+
+class HotspotResponse(BaseModel):
+    id: str
+    latitude: float
+    longitude: float
+    radius_meters: float
+    category_name: str | None
+    complaint_count: int
+    open_count: int
+    resolved_count: int
+    status_breakdown: dict[str, int]
+    severity_breakdown: dict[str, int]
+    administrative_wards: list[str]
+    zones: list[str]
+
+
+class WardSummaryResponse(BaseModel):
+    administrative_ward_name: str
+    total_complaints: int
+    open_complaints: int
+    resolved_complaints: int
+    in_progress_complaints: int
+    overdue_complaints: int
 
 
 class AIAnalysisResponse(BaseModel):

@@ -1,6 +1,7 @@
 import hashlib
 import io
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -38,8 +39,10 @@ from app.schemas import (
     DepartmentResponse,
     DisputeRequest,
     DuplicateResponse,
+    HotspotResponse,
     LeaderboardEntry,
     LoginRequest,
+    MapComplaintResponse,
     NotificationResponse,
     RegisterRequest,
     ResolutionEvidenceResponse,
@@ -52,6 +55,7 @@ from app.schemas import (
     UserResponse,
     UserRewardsSummary,
     UserRoleUpdateRequest,
+    WardSummaryResponse,
 )
 from app.security import create_access_token, hash_password, verify_password
 from app.services import (
@@ -634,7 +638,8 @@ async def officer_queue(
     authority: Authority | None = None,
     geographic_ward_number: int | None = None,
     administrative_ward_name: str | None = None,
-    status: ComplaintStatus | None = None,
+    status: str | None = None,
+    severity: str | None = None,
     category_id: uuid.UUID | None = None,
     current_user: User = Depends(require_roles(UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR)),
     session: AsyncSession = Depends(get_session)
@@ -651,13 +656,23 @@ async def officer_queue(
             query = query.where(Complaint.department_id == department_id)
         if authority:
             query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
-            
+        
     if geographic_ward_number is not None:
         query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
     if administrative_ward_name is not None:
         query = query.where(Complaint.administrative_ward_name == administrative_ward_name)
     if status is not None:
-        query = query.where(Complaint.status == status)
+        try:
+            parsed_status = ComplaintStatus(status.lower())
+            query = query.where(Complaint.status == parsed_status)
+        except ValueError:
+            pass # Ignore invalid status filter safely
+    if severity is not None:
+        try:
+            parsed_severity = Severity(severity.lower())
+            query = query.where(Complaint.severity == parsed_severity)
+        except ValueError:
+            pass # Ignore invalid severity filter safely
     if category_id is not None:
         query = query.where(Complaint.category_id == category_id)
 
@@ -883,3 +898,167 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
     result = await session.execute(query)
     return [LeaderboardEntry(user_name=row.user_name, points=int(row.points), complaints_resolved=int(row.complaints_resolved)) for row in result.all()]
 
+@router.get("/admin/complaints/map", response_model=list[MapComplaintResponse])
+async def admin_map_complaints(
+    department_id: uuid.UUID | None = None,
+    authority: Authority | None = None,
+    geographic_ward_number: int | None = None,
+    administrative_ward_name: str | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    category_id: uuid.UUID | None = None,
+    current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)),
+    session: AsyncSession = Depends(get_session)
+):
+    query = select(Complaint).where(Complaint.latitude.isnot(None), Complaint.longitude.isnot(None))
+    
+    if department_id:
+        query = query.where(Complaint.department_id == department_id)
+    if authority:
+        query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
+        
+    if geographic_ward_number is not None:
+        query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
+    if administrative_ward_name is not None:
+        query = query.where(Complaint.administrative_ward_name == administrative_ward_name)
+    if status is not None:
+        try:
+            parsed_status = ComplaintStatus(status.lower())
+            query = query.where(Complaint.status == parsed_status)
+        except ValueError:
+            pass # Ignore invalid status filter safely
+    if severity is not None:
+        try:
+            parsed_severity = Severity(severity.lower())
+            query = query.where(Complaint.severity == parsed_severity)
+        except ValueError:
+            pass # Ignore invalid severity filter safely
+    if category_id is not None:
+        query = query.where(Complaint.category_id == category_id)
+
+    # We will fetch categories, departments, and officers separately and map them in memory to avoid N+1.
+    items = (await session.scalars(query)).all()
+    
+    categories = {c.id: c.name for c in (await session.scalars(select(Category))).all()}
+    departments = {d.id: d for d in (await session.scalars(select(Department))).all()}
+    officers = {u.id: u.name for u in (await session.scalars(select(User).where(User.role.in_([UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR])))).all()}
+    
+    results = []
+    for c in items:
+        officer_name = officers.get(c.officer_id) if c.officer_id else None
+        dept = departments.get(c.department_id) if c.department_id else None
+        dept_name = dept.name if dept else None
+        cat_name = categories.get(c.category_id) if c.category_id else None
+        authority_val = dept.authority if dept else None
+        
+        results.append({
+            "id": c.id,
+            "public_id": c.public_id,
+            "latitude": c.latitude,
+            "longitude": c.longitude,
+            "category_name": cat_name,
+            "severity": c.severity,
+            "status": c.status,
+            "geographic_ward_number": c.geographic_ward_number if hasattr(c, 'geographic_ward_number') else getattr(c, 'ward_id', None),
+            "administrative_ward_name": c.administrative_ward_name,
+            "administrative_zone": c.administrative_zone,
+            "authority": authority_val,
+            "department_name": dept_name,
+            "officer_name": officer_name
+        })
+    return results
+
+
+@router.get("/admin/hotspots", response_model=list[HotspotResponse])
+async def admin_hotspots(
+    department_id: uuid.UUID | None = None,
+    authority: Authority | None = None,
+    geographic_ward_number: int | None = None,
+    administrative_ward_name: str | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    category_id: uuid.UUID | None = None,
+    radius_meters: float = 200.0,
+    current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)),
+    session: AsyncSession = Depends(get_session)
+):
+    from app.hotspots import calculate_hotspots
+    
+    query = select(Complaint).where(
+        Complaint.latitude.isnot(None), 
+        Complaint.longitude.isnot(None)
+    )
+    
+    if department_id:
+        query = query.where(Complaint.department_id == department_id)
+    if authority:
+        query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
+        
+    if geographic_ward_number is not None:
+        query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
+    if administrative_ward_name is not None:
+        query = query.where(Complaint.administrative_ward_name == administrative_ward_name)
+    if status is not None:
+        try:
+            parsed_status = ComplaintStatus(status.lower())
+            query = query.where(Complaint.status == parsed_status)
+        except ValueError:
+            pass
+    if severity is not None:
+        try:
+            parsed_severity = Severity(severity.lower())
+            query = query.where(Complaint.severity == parsed_severity)
+        except ValueError:
+            pass
+    if category_id is not None:
+        query = query.where(Complaint.category_id == category_id)
+    
+    items = (await session.scalars(query)).all()
+    categories = {c.id: c.name for c in (await session.scalars(select(Category))).all()}
+    
+    # We need to map category_name for calculate_hotspots
+    for c in items:
+        if not hasattr(c, "category_name"):
+            c.category_name = categories.get(c.category_id) if c.category_id else "Uncategorized"
+            
+    hotspots = calculate_hotspots(items, radius_meters=radius_meters)
+    return hotspots
+
+
+@router.get("/admin/ward-summary", response_model=list[WardSummaryResponse])
+async def admin_ward_summary(
+    current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)),
+    session: AsyncSession = Depends(get_session)
+):
+    # Group by administrative_ward_name
+    query = select(Complaint)
+    items = (await session.scalars(query)).all()
+    
+    ward_stats = {}
+    for c in items:
+        ward = c.administrative_ward_name or "Unassigned"
+        if ward not in ward_stats:
+            ward_stats[ward] = {
+                "administrative_ward_name": ward,
+                "total_complaints": 0,
+                "open_complaints": 0,
+                "resolved_complaints": 0,
+                "in_progress_complaints": 0,
+                "overdue_complaints": 0
+            }
+        
+        stat = ward_stats[ward]
+        stat["total_complaints"] += 1
+        
+        if c.status in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
+            stat["resolved_complaints"] += 1
+        elif c.status == ComplaintStatus.IN_PROGRESS:
+            stat["in_progress_complaints"] += 1
+            stat["open_complaints"] += 1
+        else:
+            stat["open_complaints"] += 1
+            
+        if c.sla_due_at and c.sla_due_at < datetime.now().astimezone() and c.status not in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
+            stat["overdue_complaints"] += 1
+            
+    return list(ward_stats.values())

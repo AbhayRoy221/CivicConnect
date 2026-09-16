@@ -13,6 +13,7 @@ import { ComplaintsQueue } from './pages/ComplaintsQueue'
 import { OperationsDetail } from './pages/OperationsDetail'
 import { Users } from './pages/Users'
 import { AuditLogs } from './pages/AuditLogs'
+import OperationsMap from './pages/OperationsMap'
 import { Leaderboard } from './pages/Leaderboard'
 import { Confirmation } from './pages/Confirmation'
 import { Notifications } from './pages/Notifications'
@@ -42,6 +43,7 @@ function AppContent() {
           <Route path="/admin/complaints/:id" element={<Gate roles={['administrator', 'municipal_officer']}><OperationsDetail /></Gate>} />
           <Route path="/admin/users" element={<Gate role="administrator"><Users /></Gate>} />
           <Route path="/admin/audit" element={<Gate role="administrator"><AuditLogs /></Gate>} />
+          <Route path="/admin/map" element={<Gate role="administrator"><OperationsMap /></Gate>} />
         </Routes>
       </div>
     </div>

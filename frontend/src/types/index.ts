@@ -110,3 +110,43 @@ export type AIAnalysisResponse = {
   provider: string | null
   model: string | null
 }
+
+export type MapComplaint = {
+  id: string;
+  public_id: string;
+  latitude: number;
+  longitude: number;
+  category_name: string | null;
+  severity: string;
+  status: string;
+  geographic_ward_number: number | null;
+  administrative_ward_name: string | null;
+  administrative_zone: string | null;
+  authority: string | null;
+  department_name: string | null;
+  officer_name: string | null;
+}
+
+export type Hotspot = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  category_name: string | null;
+  complaint_count: number;
+  open_count: number;
+  resolved_count: number;
+  status_breakdown: Record<string, number>;
+  severity_breakdown: Record<string, number>;
+  administrative_wards: string[];
+  zones: string[];
+}
+
+export type WardSummary = {
+  administrative_ward_name: string;
+  total_complaints: number;
+  open_complaints: number;
+  resolved_complaints: number;
+  in_progress_complaints: number;
+  overdue_complaints: number;
+}
