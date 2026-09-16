@@ -28,10 +28,12 @@ from app.models import (
     User,
     UserRole,
     PuneWard,
+    is_resolved,
     AdministrativeWardOffice,
 )
 from app.schemas import (
     AIAnalysisResponse,
+    AnalyticsDetailedResponse,
     AssignmentRequest,
     AuditLogResponse,
     CategoryResponse,
@@ -158,14 +160,14 @@ async def _complaint_response(session: AsyncSession, complaint: Complaint) -> Co
     category = await session.get(Category, complaint.category_id) if complaint.category_id else None
     department = await session.get(Department, complaint.department_id) if complaint.department_id else None
     officer = await session.get(User, complaint.officer_id) if complaint.officer_id else None
-    
+
     # Get latest resolution evidence if multiple exist
     evidence = await session.scalar(
         select(ResolutionEvidence)
         .where(ResolutionEvidence.complaint_id == complaint.id)
         .order_by(ResolutionEvidence.created_at.desc())
     )
-    
+
     return _response(complaint, category, department, evidence, officer)
 
 
@@ -202,7 +204,7 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
     user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if user is None or user.password_hash is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    
+
     resp_user = {c.name: getattr(user, c.name) for c in user.__table__.columns}
     if user.department_id:
         dept = await session.get(Department, user.department_id)
@@ -212,7 +214,7 @@ async def login(payload: LoginRequest, session: AsyncSession = Depends(get_sessi
         ward = await session.get(PuneWard, user.ward_id)
         if ward:
             resp_user["ward_name"] = ward.ward_name or str(ward.ward_number)
-            
+
     return {"access_token": create_access_token(str(user.id), user.role.value), "token_type": "bearer", "user": resp_user}
 
 
@@ -257,7 +259,7 @@ async def analyze_upload(file: UploadFile = File(...), current_user: User = Depe
     content = await file.read()
     _validate_image(file, content)
     category_name, confidence, rationale = classify_demo_image(file.filename or "upload.jpg", content)
-    
+
     provider = "unknown"
     model = "unknown"
     match = re.match(r"^\[provider=([^,\]]+)(?:,\s*model=([^\]]+))?\]\s*(.*)$", rationale)
@@ -269,10 +271,10 @@ async def analyze_upload(file: UploadFile = File(...), current_user: User = Depe
         clean_rationale = rationale
 
     logging.getLogger(__name__).info(f"provider={provider} model={model} category={category_name}")
-    
+
     return AIAnalysisResponse(
-        category_name=category_name, 
-        confidence=confidence, 
+        category_name=category_name,
+        confidence=confidence,
         rationale=clean_rationale,
         provider=provider,
         model=model
@@ -296,12 +298,12 @@ def _validate_image(file: UploadFile, content: bytes) -> None:
 async def _resolve_routing(session: AsyncSession, latitude: float | None, longitude: float | None, category: Category):
     ward = await get_ward_from_coordinates(session, latitude, longitude)
     admin_ward = await get_administrative_ward_from_coordinates(session, latitude, longitude)
-    
+
     category_dept = await session.get(Department, category.default_department_id) if category.default_department_id else None
-    
+
     if not category_dept or category_dept.authority != Authority.PMC:
         admin_ward = None
-    
+
     return ward, admin_ward, category_dept
 
 @router.post("/complaints/routing-preview", response_model=RoutingPreviewResponse)
@@ -313,13 +315,13 @@ async def routing_preview(
     category = await category_by_name(session, payload.category_name)
     if not category:
         raise HTTPException(status_code=400, detail="Invalid category")
-        
+
     ward, admin_ward, category_dept = await _resolve_routing(session, payload.latitude, payload.longitude, category)
-    
+
     assigned_officer = None
     if category_dept:
         assigned_officer = await assign_officer_to_complaint(session, category_dept.id, ward.id if ward else None)
-    
+
     assignment_status = "Ward Office / Manual Triage"
     if assigned_officer:
         assignment_status = "Auto-assign to available officer"
@@ -327,7 +329,7 @@ async def routing_preview(
         assignment_status = "No municipal department"
     elif category_dept.authority != Authority.PMC:
         assignment_status = "Not handled by PMC"
-        
+
     return RoutingPreviewResponse(
         authority=category_dept.authority if category_dept else None,
         department_name=category_dept.name if category_dept else None,
@@ -368,13 +370,13 @@ async def create_complaint(
         location = upload_path(get_settings().upload_dir, file.filename or "upload.jpg")
         Path(location).parent.mkdir(parents=True, exist_ok=True)
         location.write_bytes(content)
-        
+
         ward, admin_ward, category_dept = await _resolve_routing(session, latitude, longitude, category)
-        
+
         assigned_officer = None
         if category_dept:
             assigned_officer = await assign_officer_to_complaint(session, category_dept.id, ward.id if ward else None)
-        
+
         point = f'SRID=4326;POINT({longitude} {latitude})' if longitude is not None and latitude is not None else None
 
         complaint = Complaint(
@@ -403,7 +405,7 @@ async def create_complaint(
         )
         session.add(complaint)
         await session.flush()
-        
+
         routing_metadata = {
             "ward_id": str(ward.id) if ward else None,
             "department_id": str(category.default_department_id) if category.default_department_id else None,
@@ -422,7 +424,7 @@ async def create_complaint(
         )
         await audit(session, current_user.id, "create", "complaint", str(complaint.id))
         await notify(session, current_user.id, complaint.id, "Complaint Submitted", f"Your complaint {complaint.public_id} has been submitted successfully.")
-        
+
         await session.commit()
         await session.refresh(complaint)
         return await _complaint_response(session, complaint)
@@ -458,7 +460,7 @@ async def complaint_timeline(complaint_ref: str, current_user: User = Depends(ge
 @router.patch("/complaints/{complaint_ref}/status", response_model=ComplaintResponse)
 async def update_status(complaint_ref: str, payload: StatusUpdateRequest, current_user: User = Depends(require_roles(UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
-    
+
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
         if current_user.department_id and complaint.department_id != current_user.department_id:
             raise HTTPException(status_code=403, detail="Cannot modify complaints outside your department scope")
@@ -470,16 +472,16 @@ async def update_status(complaint_ref: str, payload: StatusUpdateRequest, curren
         raise HTTPException(status_code=400, detail="Finalized complaints cannot be modified")
     if old_status == payload.status:
         return await _complaint_response(session, complaint)
-    
+
     # Restrict status transitions
     if old_status == ComplaintStatus.SUBMITTED and payload.status not in (ComplaintStatus.ASSIGNED, ComplaintStatus.REJECTED):
         raise HTTPException(status_code=400, detail="Invalid status transition from Submitted")
     if old_status == ComplaintStatus.ASSIGNED and payload.status not in (ComplaintStatus.IN_PROGRESS, ComplaintStatus.REJECTED):
         raise HTTPException(status_code=400, detail="Invalid status transition from Assigned")
-        
+
     if payload.status == ComplaintStatus.RESOLVED and not await session.scalar(select(ResolutionEvidence).where(ResolutionEvidence.complaint_id == complaint.id)):
         raise HTTPException(status_code=400, detail="Resolution evidence is required before resolving")
-        
+
     complaint.status = payload.status
     if payload.status == ComplaintStatus.RESOLVED:
         complaint.resolved_at = func.now()
@@ -496,11 +498,11 @@ async def update_status(complaint_ref: str, payload: StatusUpdateRequest, curren
 @router.patch("/complaints/{complaint_ref}/severity", response_model=ComplaintResponse)
 async def update_severity(complaint_ref: str, payload: SeverityUpdateRequest, current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
-    
+
     old_severity = complaint.severity
     if old_severity == payload.severity:
         return await _complaint_response(session, complaint)
-        
+
     complaint.severity = payload.severity
     await audit(session, current_user.id, "severity_change", "complaint", str(complaint.id), {"from": old_severity.value, "to": payload.severity.value, "remarks": payload.remarks})
     await session.commit()
@@ -520,7 +522,7 @@ async def upvote_complaint(complaint_ref: str, current_user: User = Depends(get_
 @router.post("/complaints/{complaint_ref}/resolution", response_model=ComplaintResponse)
 async def add_resolution(complaint_ref: str, file: UploadFile = File(...), remarks: str | None = Form(default=None, max_length=2000), current_user: User = Depends(require_roles(UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
-    
+
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
         if current_user.department_id and complaint.department_id != current_user.department_id:
             raise HTTPException(status_code=403, detail="Cannot resolve complaints outside your department scope")
@@ -558,18 +560,18 @@ async def dispute_complaint(
     complaint = await _get_complaint(session, complaint_ref)
     if complaint.citizen_id != current_user.id and current_user.role != UserRole.ADMINISTRATOR:
         raise HTTPException(status_code=403, detail="Only the reporting citizen can dispute or appeal")
-    
+
     if complaint.status not in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
         raise HTTPException(status_code=400, detail="Only resolved or rejected complaints can be disputed/appealed")
-        
+
     old_status = complaint.status
     complaint.status = ComplaintStatus.IN_PROGRESS
     complaint.is_escalated = True
     complaint.resolved_at = None
-    
+
     is_appeal = old_status == ComplaintStatus.REJECTED
     action_label = "APPEALED" if is_appeal else "DISPUTED"
-    
+
     session.add(
         ComplaintStatusHistory(
             complaint_id=complaint.id,
@@ -580,11 +582,11 @@ async def dispute_complaint(
         )
     )
     await audit(session, current_user.id, f"{action_label.lower()}_resolution", "complaint", str(complaint.id), {"remarks": request.remarks})
-    
+
     notif_title = "Rejection Appealed" if is_appeal else "Resolution Disputed"
     notif_msg = f"{'Appeal' if is_appeal else 'Dispute'} for {complaint.public_id} recorded. It is now escalated for review."
     await notify(session, complaint.citizen_id, complaint.id, notif_title, notif_msg)
-    
+
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -645,7 +647,7 @@ async def officer_queue(
     session: AsyncSession = Depends(get_session)
 ):
     query = select(Complaint).order_by(Complaint.created_at.desc())
-    
+
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
         if current_user.department_id:
             query = query.where(Complaint.department_id == current_user.department_id)
@@ -656,7 +658,7 @@ async def officer_queue(
             query = query.where(Complaint.department_id == department_id)
         if authority:
             query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
-        
+
     if geographic_ward_number is not None:
         query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
     if administrative_ward_name is not None:
@@ -683,7 +685,7 @@ async def officer_queue(
 @router.patch("/complaints/{complaint_ref}/assignment", response_model=ComplaintResponse)
 async def assign_complaint(complaint_ref: str, payload: AssignmentRequest, current_user: User = Depends(require_roles(UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
-    
+
     # Check if officer is allowed to touch this complaint
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
         if current_user.department_id and complaint.department_id != current_user.department_id:
@@ -698,13 +700,13 @@ async def assign_complaint(complaint_ref: str, payload: AssignmentRequest, curre
         department = await session.get(Department, payload.department_id)
         if department is None or not department.active:
             raise HTTPException(status_code=400, detail="Department is unavailable")
-        
+
         # Enforce Authority separation
         if complaint.department_id:
             old_dept = await session.get(Department, complaint.department_id)
             if old_dept and old_dept.authority != department.authority:
                 raise HTTPException(status_code=403, detail="Cannot cross-assign across authorities (e.g. PMC to Traffic Police)")
-        
+
         target_dept = department.id
         complaint.department_id = department.id
 
@@ -712,13 +714,13 @@ async def assign_complaint(complaint_ref: str, payload: AssignmentRequest, curre
         officer = await session.get(User, payload.officer_id)
         if officer is None or officer.role != UserRole.MUNICIPAL_OFFICER:
             raise HTTPException(status_code=400, detail="Officer is unavailable")
-            
+
         if officer.department_id and target_dept and officer.department_id != target_dept:
             raise HTTPException(status_code=403, detail="Officer department does not match complaint department")
-            
+
         if officer.ward_id and complaint.ward_id and officer.ward_id != complaint.ward_id:
             raise HTTPException(status_code=403, detail="Officer ward does not match complaint ward")
-            
+
         if target_dept:
             dept = await session.get(Department, target_dept)
             if dept and dept.authority == Authority.PUNE_TRAFFIC_POLICE and officer.department_id != target_dept:
@@ -727,7 +729,7 @@ async def assign_complaint(complaint_ref: str, payload: AssignmentRequest, curre
                 officer_dept = await session.get(Department, officer.department_id)
                 if officer_dept and officer_dept.authority == Authority.PUNE_TRAFFIC_POLICE:
                     raise HTTPException(status_code=403, detail="Traffic officers cannot be assigned to PMC complaints")
-        
+
         complaint.officer_id = officer.id
     else:
         complaint.officer_id = None
@@ -736,10 +738,10 @@ async def assign_complaint(complaint_ref: str, payload: AssignmentRequest, curre
         complaint.status = ComplaintStatus.ASSIGNED
         session.add(ComplaintStatusHistory(complaint_id=complaint.id, old_status=ComplaintStatus.SUBMITTED, new_status=ComplaintStatus.ASSIGNED, changed_by=current_user.id, remarks="Assignment updated."))
     await audit(session, current_user.id, "assign", "complaint", str(complaint.id))
-    
+
     if payload.officer_id:
         await notify(session, complaint.citizen_id, complaint.id, "Complaint Assigned", f"Your complaint {complaint.public_id} has been assigned to an officer.")
-        
+
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -753,14 +755,14 @@ async def analytics(current_user: User = Depends(require_roles(UserRole.ADMINIST
             query = query.where(Complaint.department_id == current_user.department_id)
         else:
             query = query.where(Complaint.officer_id == current_user.id)
-            
+
     base_subq = query.subquery()
 
     total = await session.scalar(select(func.count(base_subq.c.id)))
-    
+
     status_counts = (await session.execute(select(base_subq.c.status, func.count(base_subq.c.id)).group_by(base_subq.c.status))).all()
     by_status = {s.value: c for s, c in status_counts}
-    
+
     category_counts = (await session.execute(
         select(Category.name, func.count(base_subq.c.id))
         .select_from(base_subq)
@@ -793,7 +795,7 @@ async def analytics(current_user: User = Depends(require_roles(UserRole.ADMINIST
 
     resolved = by_status.get(ComplaintStatus.RESOLVED.value, 0)
     resolution_rate = round(resolved / total * 100, 1) if total > 0 else 0.0
-    
+
     my_assigned = await session.scalar(select(func.count(Complaint.id)).where(Complaint.officer_id == current_user.id))
     disputed = await session.scalar(select(func.count(base_subq.c.id)).where(base_subq.c.is_escalated == True))
 
@@ -829,7 +831,7 @@ async def admin_gis_status(
 ):
     pune_wards_count = await session.scalar(select(func.count()).select_from(PuneWard))
     admin_wards_count = await session.scalar(select(func.count()).select_from(AdministrativeWardOffice))
-    
+
     return {
         "status": "Live PMC GIS refresh unavailable; using last verified database snapshot.",
         "pune_wards_count": pune_wards_count,
@@ -911,12 +913,12 @@ async def admin_map_complaints(
     session: AsyncSession = Depends(get_session)
 ):
     query = select(Complaint).where(Complaint.latitude.isnot(None), Complaint.longitude.isnot(None))
-    
+
     if department_id:
         query = query.where(Complaint.department_id == department_id)
     if authority:
         query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
-        
+
     if geographic_ward_number is not None:
         query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
     if administrative_ward_name is not None:
@@ -938,11 +940,11 @@ async def admin_map_complaints(
 
     # We will fetch categories, departments, and officers separately and map them in memory to avoid N+1.
     items = (await session.scalars(query)).all()
-    
+
     categories = {c.id: c.name for c in (await session.scalars(select(Category))).all()}
     departments = {d.id: d for d in (await session.scalars(select(Department))).all()}
     officers = {u.id: u.name for u in (await session.scalars(select(User).where(User.role.in_([UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR])))).all()}
-    
+
     results = []
     for c in items:
         officer_name = officers.get(c.officer_id) if c.officer_id else None
@@ -950,7 +952,7 @@ async def admin_map_complaints(
         dept_name = dept.name if dept else None
         cat_name = categories.get(c.category_id) if c.category_id else None
         authority_val = dept.authority if dept else None
-        
+
         results.append({
             "id": c.id,
             "public_id": c.public_id,
@@ -983,17 +985,17 @@ async def admin_hotspots(
     session: AsyncSession = Depends(get_session)
 ):
     from app.hotspots import calculate_hotspots
-    
+
     query = select(Complaint).where(
-        Complaint.latitude.isnot(None), 
+        Complaint.latitude.isnot(None),
         Complaint.longitude.isnot(None)
     )
-    
+
     if department_id:
         query = query.where(Complaint.department_id == department_id)
     if authority:
         query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == authority)
-        
+
     if geographic_ward_number is not None:
         query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
     if administrative_ward_name is not None:
@@ -1012,15 +1014,15 @@ async def admin_hotspots(
             pass
     if category_id is not None:
         query = query.where(Complaint.category_id == category_id)
-    
+
     items = (await session.scalars(query)).all()
     categories = {c.id: c.name for c in (await session.scalars(select(Category))).all()}
-    
+
     # We need to map category_name for calculate_hotspots
     for c in items:
         if not hasattr(c, "category_name"):
             c.category_name = categories.get(c.category_id) if c.category_id else "Uncategorized"
-            
+
     hotspots = calculate_hotspots(items, radius_meters=radius_meters)
     return hotspots
 
@@ -1033,7 +1035,7 @@ async def admin_ward_summary(
     # Group by administrative_ward_name
     query = select(Complaint)
     items = (await session.scalars(query)).all()
-    
+
     ward_stats = {}
     for c in items:
         ward = c.administrative_ward_name or "Unassigned"
@@ -1046,19 +1048,282 @@ async def admin_ward_summary(
                 "in_progress_complaints": 0,
                 "overdue_complaints": 0
             }
-        
+
         stat = ward_stats[ward]
         stat["total_complaints"] += 1
-        
-        if c.status in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
+
+        if is_resolved(c.status):
             stat["resolved_complaints"] += 1
         elif c.status == ComplaintStatus.IN_PROGRESS:
             stat["in_progress_complaints"] += 1
             stat["open_complaints"] += 1
         else:
             stat["open_complaints"] += 1
-            
-        if c.sla_due_at and c.sla_due_at < datetime.now().astimezone() and c.status not in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
+
+        if c.sla_due_at and c.sla_due_at < datetime.now().astimezone() and not is_resolved(c.status):
             stat["overdue_complaints"] += 1
-            
+
     return list(ward_stats.values())
+
+
+@router.get("/admin/analytics/detailed", response_model=AnalyticsDetailedResponse)
+async def admin_analytics_detailed(
+    department_id: uuid.UUID | None = None,
+    geographic_ward_number: int | None = None,
+    administrative_ward_name: str | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    category_id: uuid.UUID | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    authority: str | None = None,
+    current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR, UserRole.MUNICIPAL_OFFICER)),
+    session: AsyncSession = Depends(get_session)
+):
+    if current_user.role == UserRole.CITIZEN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    query = select(Complaint)
+
+    if current_user.role == UserRole.MUNICIPAL_OFFICER:
+        if current_user.department_id:
+            query = query.where(Complaint.department_id == current_user.department_id)
+        else:
+            raise HTTPException(status_code=403, detail="Officer has no department assigned")
+
+    if department_id is not None:
+        query = query.where(Complaint.department_id == department_id)
+    if geographic_ward_number is not None:
+        query = query.where(Complaint.geographic_ward_number == geographic_ward_number)
+    if administrative_ward_name is not None:
+        query = query.where(Complaint.administrative_ward_name == administrative_ward_name)
+    if status is not None:
+        try:
+            parsed_status = ComplaintStatus(status.lower())
+            query = query.where(Complaint.status == parsed_status)
+        except ValueError:
+            pass
+    if severity is not None:
+        try:
+            parsed_severity = Severity(severity.lower())
+            query = query.where(Complaint.severity == parsed_severity)
+        except ValueError:
+            pass
+    if category_id is not None:
+        query = query.where(Complaint.category_id == category_id)
+    if authority is not None:
+        try:
+            parsed_auth = Authority(authority.upper())
+            query = query.join(Department, Complaint.department_id == Department.id).where(Department.authority == parsed_auth)
+        except ValueError:
+            pass
+    if start_date is not None:
+        try:
+            sd = datetime.fromisoformat(start_date)
+            query = query.where(Complaint.created_at >= sd)
+        except ValueError:
+            pass
+    if end_date is not None:
+        try:
+            ed = datetime.fromisoformat(end_date)
+            query = query.where(Complaint.created_at <= ed)
+        except ValueError:
+            pass
+
+    items = (await session.scalars(query)).all()
+
+    # 1. KPIs
+    total = len(items)
+    resolved = 0
+    rejected = 0
+    open_c = 0
+    in_progress = 0
+    escalated = 0
+
+    for c in items:
+        if c.status == ComplaintStatus.RESOLVED:
+            resolved += 1
+        elif c.status == ComplaintStatus.REJECTED:
+            rejected += 1
+        elif c.status == ComplaintStatus.IN_PROGRESS:
+            in_progress += 1
+            open_c += 1
+        else:
+            open_c += 1
+
+        if c.is_escalated:
+            escalated += 1
+
+    res_rate = (resolved / total * 100) if total > 0 else 0.0
+
+    # 2. Trends (group by day)
+    from collections import defaultdict
+    trends_map = {}
+    for c in items:
+        if not c.created_at: continue
+        d = c.created_at.strftime("%Y-%m-%d")
+        if d not in trends_map:
+            trends_map[d] = {"submitted": 0, "resolved": 0}
+        trends_map[d]["submitted"] += 1
+
+        if c.resolved_at:
+            rd = c.resolved_at.strftime("%Y-%m-%d")
+            if rd not in trends_map:
+                trends_map[rd] = {"submitted": 0, "resolved": 0}
+            trends_map[rd]["resolved"] += 1
+
+    trends_list = [{"date": k, "submitted": v["submitted"], "resolved": v["resolved"]} for k, v in sorted(trends_map.items())]
+
+    # 3. Status Distribution
+    status_dist = {"submitted": 0, "assigned": 0, "in_progress": 0, "resolved": 0, "rejected": 0, "escalated": 0}
+    for c in items:
+        val = c.status.value if hasattr(c.status, "value") else str(c.status)
+        if val in status_dist:
+            status_dist[val] += 1
+        if c.is_escalated:
+            status_dist["escalated"] += 1
+
+    # 4. Severity Distribution
+    sev_dist = {
+        "citizen_reported": {"not_assessed": 0, "low": 0, "medium": 0, "high": 0, "critical": 0},
+        "system_assessed": {"not_assessed": 0, "low": 0, "medium": 0, "high": 0, "critical": 0},
+        "final_severity": {"not_assessed": 0, "low": 0, "medium": 0, "high": 0, "critical": 0},
+    }
+
+    for c in items:
+        f_sev = c.severity.value if hasattr(c.severity, "value") else str(c.severity)
+        if f_sev in sev_dist["final_severity"]:
+            sev_dist["final_severity"][f_sev] += 1
+
+        c_sev = (c.citizen_reported_severity.value if hasattr(c.citizen_reported_severity, "value") else str(c.citizen_reported_severity)) if c.citizen_reported_severity else "not_assessed"
+        if c_sev in sev_dist["citizen_reported"]:
+            sev_dist["citizen_reported"][c_sev] += 1
+
+        s_sev = (c.system_assessed_severity.value if hasattr(c.system_assessed_severity, "value") else str(c.system_assessed_severity)) if c.system_assessed_severity else "not_assessed"
+        if s_sev in sev_dist["system_assessed"]:
+            sev_dist["system_assessed"][s_sev] += 1
+
+    # 5. Ward Summary
+    ward_stats = {}
+    for c in items:
+        ward = c.administrative_ward_name or "Unassigned"
+        if ward not in ward_stats:
+            ward_stats[ward] = {
+                "administrative_ward_name": ward,
+                "total_complaints": 0, "open_complaints": 0, "resolved_complaints": 0,
+                "in_progress_complaints": 0, "overdue_complaints": 0
+            }
+        st = ward_stats[ward]
+        st["total_complaints"] += 1
+        if is_resolved(c.status):
+            st["resolved_complaints"] += 1
+        elif c.status == ComplaintStatus.IN_PROGRESS:
+            st["in_progress_complaints"] += 1
+            st["open_complaints"] += 1
+        else:
+            st["open_complaints"] += 1
+
+        if c.sla_due_at and c.sla_due_at < datetime.now().astimezone() and not is_resolved(c.status):
+            st["overdue_complaints"] += 1
+
+    ward_summary = list(ward_stats.values())
+
+    # 6. Department Workload
+    dept_stats = {}
+    # Fetch department names
+    depts = {d.id: d.name for d in (await session.scalars(select(Department))).all()}
+
+    for c in items:
+        d_id = c.department_id
+        d_name = depts.get(d_id, "Unassigned") if d_id else "Unassigned"
+        if d_name not in dept_stats:
+            dept_stats[d_name] = {
+                "department_name": d_name, "total": 0, "open": 0, "in_progress": 0,
+                "resolved": 0, "overdue": 0, "assigned": 0, "unassigned": 0
+            }
+        st = dept_stats[d_name]
+        st["total"] += 1
+
+        if is_resolved(c.status):
+            st["resolved"] += 1
+        elif c.status == ComplaintStatus.IN_PROGRESS:
+            st["in_progress"] += 1
+            st["open"] += 1
+        else:
+            st["open"] += 1
+
+        if c.sla_due_at and c.sla_due_at < datetime.now().astimezone() and not is_resolved(c.status):
+            st["overdue"] += 1
+
+        if c.officer_id:
+            st["assigned"] += 1
+        else:
+            st["unassigned"] += 1
+
+    dept_summary = list(dept_stats.values())
+
+    # 7. SLA Analytics
+    sla = {"on_track": 0, "due_soon": 0, "overdue": 0, "resolved_within_sla": 0, "resolved_after_sla": 0}
+    now = datetime.now().astimezone()
+    for c in items:
+        if not c.sla_due_at: continue
+
+        if is_resolved(c.status):
+            if c.resolved_at and c.resolved_at <= c.sla_due_at:
+                sla["resolved_within_sla"] += 1
+            else:
+                sla["resolved_after_sla"] += 1
+        else:
+            if now > c.sla_due_at:
+                sla["overdue"] += 1
+            elif (c.sla_due_at - now).total_seconds() <= 86400:
+                sla["due_soon"] += 1
+            else:
+                sla["on_track"] += 1
+
+    total_sla_resolved = sla["resolved_within_sla"] + sla["resolved_after_sla"]
+    sla_rate = (sla["resolved_within_sla"] / total_sla_resolved * 100) if total_sla_resolved > 0 else 0.0
+
+    # 8. Resolution Performance
+    resolution_times = []
+    for c in items:
+        if is_resolved(c.status) and c.resolved_at and c.created_at:
+            diff = (c.resolved_at - c.created_at).total_seconds() / 3600.0 # in hours
+            if diff >= 0:
+                resolution_times.append(diff)
+
+    avg_hours = sum(resolution_times) / len(resolution_times) if resolution_times else 0.0
+    med_hours = sorted(resolution_times)[len(resolution_times)//2] if resolution_times else 0.0
+
+    # 9. Escalation Insights
+    esc = {"current_escalated": 0, "total_disputes": 0, "rejected": rejected, "reopened_after_dispute": 0}
+
+    for c in items:
+        if c.is_escalated:
+            esc["total_disputes"] += 1
+            if not is_resolved(c.status):
+                esc["current_escalated"] += 1
+            elif is_resolved(c.status) and c.status == ComplaintStatus.RESOLVED:
+                # Assuming if it was escalated and is now resolved, it was reopened and resolved again.
+                esc["reopened_after_dispute"] += 1
+
+    return AnalyticsDetailedResponse(
+        kpis={
+            "total_complaints": total,
+            "open_complaints": open_c,
+            "in_progress_complaints": in_progress,
+            "resolved_complaints": resolved,
+            "rejected_complaints": rejected,
+            "escalated_complaints": escalated,
+            "resolution_rate": res_rate,
+            "sla_compliance_rate": sla_rate,
+        },
+        trends=trends_list,
+        status_distribution=status_dist,
+        severity_analysis=sev_dist,
+        ward_summary=ward_summary,
+        department_workload=dept_summary,
+        sla_analytics=sla,
+        resolution_performance={"average_hours": avg_hours, "median_hours": med_hours},
+        escalation_insights=esc
+    )

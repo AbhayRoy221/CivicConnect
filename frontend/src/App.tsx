@@ -14,6 +14,7 @@ import { OperationsDetail } from './pages/OperationsDetail'
 import { Users } from './pages/Users'
 import { AuditLogs } from './pages/AuditLogs'
 import OperationsMap from './pages/OperationsMap'
+import { AnalyticsDashboard } from './pages/AnalyticsDashboard'
 import { Leaderboard } from './pages/Leaderboard'
 import { Confirmation } from './pages/Confirmation'
 import { Notifications } from './pages/Notifications'
@@ -40,6 +41,7 @@ function AppContent() {
           {/* Operations Dashboard Routes */}
           <Route path="/admin" element={<Gate roles={['administrator', 'municipal_officer']}><Dashboard /></Gate>} />
           <Route path="/admin/queue" element={<Gate roles={['administrator', 'municipal_officer']}><ComplaintsQueue /></Gate>} />
+          <Route path="/admin/analytics" element={<Gate roles={['administrator', 'municipal_officer']}><AnalyticsDashboard /></Gate>} />
           <Route path="/admin/complaints/:id" element={<Gate roles={['administrator', 'municipal_officer']}><OperationsDetail /></Gate>} />
           <Route path="/admin/users" element={<Gate role="administrator"><Users /></Gate>} />
           <Route path="/admin/audit" element={<Gate role="administrator"><AuditLogs /></Gate>} />

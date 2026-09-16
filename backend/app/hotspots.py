@@ -82,7 +82,8 @@ def calculate_hotspots(complaints: list[Any], radius_meters: float = 200.0) -> l
                 status_brk[status] = status_brk.get(status, 0) + 1
                 sev_brk[sev] = sev_brk.get(sev, 0) + 1
                 
-                if status in ("RESOLVED", "resolved", "CLOSED", "closed"):
+                from app.models import is_resolved
+                if is_resolved(status):
                     resolved_count += 1
                 else:
                     open_count += 1

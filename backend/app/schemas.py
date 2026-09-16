@@ -263,6 +263,35 @@ class LeaderboardEntry(BaseModel):
     complaints_resolved: int
 
 
+class TrendDataPoint(BaseModel):
+    date: str
+    submitted: int
+    resolved: int
+
+
+class DepartmentWorkload(BaseModel):
+    department_name: str
+    total: int
+    open: int
+    in_progress: int
+    resolved: int
+    overdue: int
+    assigned: int
+    unassigned: int
+
+
+class AnalyticsDetailedResponse(BaseModel):
+    kpis: dict[str, float]
+    trends: list[TrendDataPoint]
+    status_distribution: dict[str, int]
+    severity_analysis: dict[str, dict[str, int]]
+    ward_summary: list[WardSummaryResponse]
+    department_workload: list[DepartmentWorkload]
+    sla_analytics: dict[str, int]
+    resolution_performance: dict[str, float]
+    escalation_insights: dict[str, int]
+
+
 class RoutingPreviewRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None

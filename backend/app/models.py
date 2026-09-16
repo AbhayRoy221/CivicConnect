@@ -26,6 +26,11 @@ class ComplaintStatus(str, enum.Enum):
     RESOLVED = "resolved"
     REJECTED = "rejected"
 
+def is_resolved(status: ComplaintStatus | str) -> bool:
+    """Canonical definition of whether a complaint is considered resolved/closed."""
+    val = status.value if isinstance(status, enum.Enum) else str(status)
+    return val.lower() in ("resolved", "rejected")
+
 
 class Authority(str, enum.Enum):
     PMC = "PMC"

@@ -84,7 +84,6 @@ export const MapFilters: React.FC<MapFiltersProps> = ({
           <option value="">All Authorities</option>
           <option value="PMC">PMC</option>
           <option value="PUNE_TRAFFIC_POLICE">Pune Traffic Police</option>
-          <option value="NONE">None</option>
         </select>
       </div>
 
