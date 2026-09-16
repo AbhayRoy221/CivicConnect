@@ -1,0 +1,40 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+
+# Git
+.git/
+
+# Databases
+*.db
+*.sqlite3
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Uploads
+uploads/
+
+# Large ML Datasets and Models
+data/external_online/
+data/external_portrait_280/
+data/external_pune_test/
+data/kaggle_pothole_dataset/
+data/portrait_280_training_source/
+data/portrait_280_training_split/
+data/raw/
+data/processed/
+data/models/
+data/metadata/
+archive/
