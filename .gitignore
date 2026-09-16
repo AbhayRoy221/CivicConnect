@@ -16,3 +16,7 @@ refactor*.py
 download_qr4change.py
 test.jpg
 project_structure.txt
+*.zip
+*.db
+*.sqlite3
+*.log
