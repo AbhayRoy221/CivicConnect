@@ -225,6 +225,21 @@ class DuplicateResponse(BaseModel):
     status: str
 
 
+class RelatedComplaintResponse(BaseModel):
+    public_id: str
+    category_name: str | None = None
+    status: str
+    severity: str
+    latitude: float | None = None
+    longitude: float | None = None
+    administrative_ward_name: str | None = None
+    geographic_ward_number: int | None = None
+    created_at: datetime
+    distance_meters: float
+    match_score: int
+    match_reasons: list[str]
+
+
 class UserRoleUpdateRequest(BaseModel):
     role: UserRole
     department_id: UUID | None = None

@@ -47,6 +47,7 @@ from app.schemas import (
     MapComplaintResponse,
     NotificationResponse,
     RegisterRequest,
+    RelatedComplaintResponse,
     ResolutionEvidenceResponse,
     RewardResponse,
     RoutingPreviewRequest,
@@ -66,7 +67,7 @@ from app.services import (
     calculate_sla_due_at,
     category_by_name,
     classify_demo_image,
-    find_possible_duplicates,
+    find_related_complaints,
     get_ward_from_coordinates,
     get_administrative_ward_from_coordinates,
     make_public_id,
@@ -441,6 +442,28 @@ async def my_complaints(current_user: User = Depends(get_current_user), session:
     return [await _complaint_response(session, item) for item in items]
 
 
+@router.get("/complaints/check-related", response_model=list[RelatedComplaintResponse])
+async def check_related_complaints_pre(
+    latitude: float,
+    longitude: float,
+    category_name: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """Pre-submission related complaint check (uses category_name, no complaint ID)."""
+    cat = await category_by_name(session, category_name)
+    if not cat:
+        return []
+
+    related = await find_related_complaints(
+        session=session,
+        latitude=latitude,
+        longitude=longitude,
+        category_id=cat.id
+    )
+    return related
+
+
 @router.get("/complaints/{complaint_ref}", response_model=ComplaintResponse)
 async def complaint_detail(complaint_ref: str, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
@@ -592,19 +615,26 @@ async def dispute_complaint(
     return await _complaint_response(session, complaint)
 
 
-@router.get("/duplicates/check/{complaint_ref}", response_model=list[DuplicateResponse])
-async def duplicate_check(complaint_ref: str, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+
+
+
+@router.get("/complaints/{complaint_ref}/related", response_model=list[RelatedComplaintResponse])
+async def get_related_complaints(complaint_ref: str, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
     if not _can_view(current_user, complaint):
         raise HTTPException(status_code=403, detail="You cannot access this complaint")
-    candidates = await find_possible_duplicates(session, complaint)
-    responses = []
-    for candidate in candidates:
-        existing = await session.scalar(select(DuplicateLink).where(DuplicateLink.complaint_id == complaint.id, DuplicateLink.possible_duplicate_id == candidate.id))
-        status = existing.status.value if existing else DuplicateLinkStatus.PENDING.value
-        score = existing.similarity_score if existing else 0.75
-        responses.append(DuplicateResponse(complaint_public_id=candidate.public_id, similarity_score=score, status=status))
-    return responses
+
+    if complaint.latitude is None or complaint.longitude is None or complaint.category_id is None:
+        return []
+
+    related = await find_related_complaints(
+        session=session,
+        latitude=complaint.latitude,
+        longitude=complaint.longitude,
+        category_id=complaint.category_id,
+        exclude_id=complaint.id
+    )
+    return related
 
 
 @router.get("/notifications", response_model=list[NotificationResponse])

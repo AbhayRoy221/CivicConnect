@@ -24,7 +24,8 @@ export function OperationsDetail() {
   const { id } = useParams()
   const { token, user } = useAuth()
   const [c, setC] = useState<Complaint | null>(null)
-  
+  const [relatedReports, setRelatedReports] = useState<any[]>([])
+
   const [departments, setDepartments] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [file, setFile] = useState<File | null>(null)
@@ -32,7 +33,7 @@ export function OperationsDetail() {
   const [assignDeptId, setAssignDeptId] = useState('')
   const [assignOfficerId, setAssignOfficerId] = useState('')
   const [assignSeverity, setAssignSeverity] = useState('')
-  
+
   useEffect(() => {
     load()
     api<any[]>('/departments').then(setDepartments).catch(() => {})
@@ -48,14 +49,20 @@ export function OperationsDetail() {
       setAssignDeptId(res.department_id || '')
       setAssignOfficerId(res.officer_id || '')
       setAssignSeverity(res.severity || '')
+
+      try {
+        const rel = await api<any[]>(`/complaints/${id}/related`, token)
+        setRelatedReports(rel)
+      } catch (err) { console.warn("Failed to load related reports") }
+
     } catch (e: any) { alert(e.message) }
   }
 
   async function updateStatus(status: string, reason?: string) {
     try {
-      await api(`/complaints/${c?.public_id}/status`, token, { 
-        method: 'PATCH', 
-        body: JSON.stringify({ status, remarks: reason || undefined }) 
+      await api(`/complaints/${c?.public_id}/status`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, remarks: reason || undefined })
       })
       load()
     } catch (e: any) { alert(e.message) }
@@ -66,9 +73,9 @@ export function OperationsDetail() {
     try {
       const reason = window.prompt("Reason for severity change:")
       if (reason === null) return // Cancelled
-      await api(`/complaints/${c?.public_id}/severity`, token, { 
-        method: 'PATCH', 
-        body: JSON.stringify({ severity: assignSeverity, remarks: reason || undefined }) 
+      await api(`/complaints/${c?.public_id}/severity`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ severity: assignSeverity, remarks: reason || undefined })
       })
       load()
     } catch (e: any) { alert(e.message) }
@@ -77,12 +84,12 @@ export function OperationsDetail() {
   async function assign(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await api(`/complaints/${c?.public_id}/assignment`, token, { 
-        method: 'PATCH', 
-        body: JSON.stringify({ 
-          department_id: assignDeptId || null, 
-          officer_id: assignOfficerId || null 
-        }) 
+      await api(`/complaints/${c?.public_id}/assignment`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          department_id: assignDeptId || null,
+          officer_id: assignOfficerId || null
+        })
       })
       load()
       window.dispatchEvent(new Event('notifications_updated'))
@@ -280,7 +287,7 @@ export function OperationsDetail() {
                     const now = Date.now();
                     const isResolved = !!c.resolved_at;
                     const hoursLeft = (due - now) / (1000 * 60 * 60);
-                    
+
                     let statusObj = { label: 'On track', color: 'bg-emerald-100 text-emerald-700' };
                     if (isResolved) {
                       statusObj = { label: 'Resolved', color: 'bg-slate-100 text-slate-700' };
@@ -289,7 +296,7 @@ export function OperationsDetail() {
                     } else if (hoursLeft < 24) {
                       statusObj = { label: 'Due soon', color: 'bg-amber-100 text-amber-700 font-bold' };
                     }
-                    
+
                     return (
                       <div className="flex items-center gap-3">
                         <span className={`px-2.5 py-1 rounded-md text-xs uppercase tracking-wider ${statusObj.color}`}>
@@ -301,7 +308,7 @@ export function OperationsDetail() {
                   })()}
                 </div>
               )}
-              
+
               <div className="pt-4 border-t border-slate-100">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Current Assignment</div>
                 <div className="text-sm font-medium text-slate-900">
@@ -312,7 +319,7 @@ export function OperationsDetail() {
                   )}
                 </div>
               </div>
-              
+
               {isAdmin && (
                 <form onSubmit={assign} className="pt-4 border-t border-slate-100">
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Re-assign</div>
@@ -321,7 +328,7 @@ export function OperationsDetail() {
                       <option value="">No Department</option>
                       {departments.filter(d => c.authority ? d.authority === c.authority : true).map(d => <option key={d.id} value={d.id}>{d.name} ({d.authority})</option>)}
                     </select>
-                    
+
                     <select className="w-full text-sm p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none" value={assignOfficerId} onChange={e => setAssignOfficerId(e.target.value)}>
                       <option value="">No Officer</option>
                       {users.filter(u => u.role === 'municipal_officer' && (!u.department_id || u.department_id === (assignDeptId || c.department_id)) && (!u.ward_id || u.ward_id === c.geographic_ward_number)).map(u => <option key={u.id} value={u.id}>{u.name} (Demo)</option>)}
@@ -332,7 +339,7 @@ export function OperationsDetail() {
                   </div>
                 </form>
               )}
-              
+
               {isAdmin && (
                 <form onSubmit={updateSeverity} className="pt-4 border-t border-slate-100">
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Update Final Severity</div>
@@ -380,7 +387,7 @@ export function OperationsDetail() {
                       </button>
                     </form>
                   )}
-                  
+
                   {c.status === 'submitted' || c.status === 'assigned' || c.status === 'in_progress' ? (
                     <div className="pt-4 border-t border-slate-100 mt-4">
                       <button onClick={() => {
@@ -400,6 +407,40 @@ export function OperationsDetail() {
               )}
             </div>
           </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-6">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-slate-900">Related Reports</h2>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{relatedReports.length}</span>
+            </div>
+            <div className="p-5">
+              {relatedReports.length === 0 ? (
+                <div className="text-sm text-slate-500 italic text-center p-4">No related reports found.</div>
+              ) : (
+                <div className="space-y-3">
+                  {relatedReports.map(r => (
+                    <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50 relative overflow-hidden">
+                      <div className="flex justify-between mb-1">
+                        <span className="font-mono font-bold text-slate-700">{r.public_id}</span>
+                        <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium">{Math.round(r.distance_meters)}m away</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
+                        <span className="text-indigo-700">{r.category_name}</span>
+                        <span className={r.status === 'resolved' ? 'text-emerald-700' : 'text-slate-600'}>{r.status.replace('_', ' ')}</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
+                        <strong>Match:</strong> {r.match_reasons.join(' • ')} (Score: {r.match_score})
+                      </div>
+                      <a href={`/admin/complaints/${r.public_id}`} className="mt-3 block text-center text-xs font-bold bg-white border border-slate-300 text-slate-700 py-1.5 rounded hover:bg-slate-50 transition-colors">
+                        View Complaint &rarr;
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
     </DashboardLayout>

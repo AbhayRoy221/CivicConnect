@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -133,27 +134,79 @@ async def audit(session: AsyncSession, actor_id, action: str, entity_type: str, 
     )
 
 
-async def find_possible_duplicates(session: AsyncSession, complaint: Complaint) -> list[Complaint]:
-    if complaint.category_id is None or complaint.latitude is None or complaint.longitude is None:
-        return []
-    since = datetime.now(timezone.utc) - timedelta(days=30)
-    candidates = (
-        await session.scalars(
-            select(Complaint).where(
-                Complaint.id != complaint.id,
-                Complaint.category_id == complaint.category_id,
-                Complaint.created_at >= since,
-            )
-        )
-    ).all()
-    return [
-        item
-        for item in candidates
-        if item.latitude is not None
-        and item.longitude is not None
-        and abs(item.latitude - complaint.latitude) < 0.01
-        and abs(item.longitude - complaint.longitude) < 0.01
-    ]
+DUPLICATE_RADIUS_METERS = 200.0
+DUPLICATE_LOOKBACK_DAYS = 7
+
+async def find_related_complaints(
+    session: AsyncSession,
+    latitude: float,
+    longitude: float,
+    category_id: uuid.UUID,
+    exclude_id: uuid.UUID | None = None,
+    radius_meters: float = DUPLICATE_RADIUS_METERS,
+    lookback_days: int = DUPLICATE_LOOKBACK_DAYS,
+    min_score: int = 40
+) -> list[dict]:
+    from app.hotspots import haversine_distance
+    from app.models import Category
+
+    since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+
+    query = select(Complaint, Category.name).outerjoin(Category, Complaint.category_id == Category.id).where(
+        Complaint.category_id == category_id,
+        Complaint.created_at >= since,
+        Complaint.latitude.isnot(None),
+        Complaint.longitude.isnot(None)
+    )
+    if exclude_id:
+        query = query.where(Complaint.id != exclude_id)
+
+    candidates = (await session.execute(query)).all()
+
+    results = []
+    for c, cat_name in candidates:
+        dist = haversine_distance(latitude, longitude, c.latitude, c.longitude)
+
+        if dist <= radius_meters:
+            # Score calculation
+            score = 50 # Category match base score
+            reasons = ["Same category"]
+
+            if dist <= 50:
+                score += 30
+                reasons.append(f"Very close ({int(dist)}m)")
+            elif dist <= 100:
+                score += 20
+                reasons.append(f"Nearby ({int(dist)}m)")
+            elif dist <= 200:
+                score += 10
+                reasons.append(f"In vicinity ({int(dist)}m)")
+
+            days_ago = (datetime.now(timezone.utc) - c.created_at.replace(tzinfo=timezone.utc)).days
+            if days_ago == 0:
+                reasons.append("Reported today")
+            else:
+                reasons.append(f"Reported {days_ago} days ago")
+
+            if score >= min_score:
+                results.append({
+                    "public_id": c.public_id,
+                    "category_name": cat_name,
+                    "status": c.status.value if hasattr(c.status, "value") else str(c.status),
+                    "severity": c.severity.value if hasattr(c.severity, "value") else str(c.severity),
+                    "latitude": c.latitude,
+                    "longitude": c.longitude,
+                    "administrative_ward_name": c.administrative_ward_name,
+                    "geographic_ward_number": c.geographic_ward_number,
+                    "created_at": c.created_at,
+                    "distance_meters": dist,
+                    "match_score": score,
+                    "match_reasons": reasons
+                })
+
+    # Sort by score descending
+    results.sort(key=lambda x: x["match_score"], reverse=True)
+    return results
 
 
 def upload_path(upload_dir: str, filename: str) -> Path:

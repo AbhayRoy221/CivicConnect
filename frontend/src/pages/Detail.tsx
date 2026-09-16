@@ -15,6 +15,8 @@ export function Detail() {
   const [disputeRemarks, setDisputeRemarks] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const [relatedReports, setRelatedReports] = useState<any[]>([])
+
   useEffect(() => {
     load()
   }, [id, token])
@@ -23,13 +25,19 @@ export function Detail() {
     try {
       const c = await api<Complaint>(`/complaints/${id}`, token)
       setComplaint(c)
-      
+
       const tl = await api<ComplaintHistory[]>(`/complaints/${id}/timeline`, token)
       setTimeline(tl)
-      
+
       if (c.resolution_evidence) {
         setEvidence([c.resolution_evidence])
       }
+
+      try {
+        const rel = await api<any[]>(`/complaints/${id}/related`, token)
+        setRelatedReports(rel)
+      } catch (err) { console.warn("Failed to load related reports") }
+
     } catch (e: Error | any) {
       alert(e.message)
     }
@@ -69,8 +77,8 @@ export function Detail() {
         <Link to="/my-reports" className="text-slate-500 hover:text-slate-900 transition-colors">← Back</Link>
         <h1 className="text-xl font-bold text-slate-900 flex-1 truncate">Report {complaint.public_id}</h1>
         <span className={`px-3 py-1 text-xs font-bold uppercase rounded-full tracking-wide ${
-          isResolved ? 'bg-emerald-100 text-emerald-800' : 
-          isRejected ? 'bg-red-100 text-red-800' : 
+          isResolved ? 'bg-emerald-100 text-emerald-800' :
+          isRejected ? 'bg-red-100 text-red-800' :
           'bg-amber-100 text-amber-800'
         }`}>
           {complaint.status.replace('_', ' ')}
@@ -94,7 +102,7 @@ export function Detail() {
             <div>
               <div className="font-bold text-amber-900 text-sm mb-1">Possible Duplicate Detected</div>
               <div className="text-amber-800 text-sm">
-                There is another report nearby with {Math.round(complaint.duplicates[0].similarity_score * 100)}% visual similarity. 
+                There is another report nearby with {Math.round(complaint.duplicates[0].similarity_score * 100)}% visual similarity.
                 This may affect prioritization.
               </div>
             </div>
@@ -150,9 +158,9 @@ export function Detail() {
                 </div>
               </div>
               <div className="pt-2 border-t border-slate-100">
-                <a 
-                  href={`https://www.google.com/maps/search/?api=1&query=${complaint.latitude},${complaint.longitude}`} 
-                  target="_blank" 
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${complaint.latitude},${complaint.longitude}`}
+                  target="_blank"
                   rel="noreferrer"
                   className="text-indigo-600 hover:text-indigo-800 font-semibold text-xs flex items-center gap-1"
                 >
@@ -187,7 +195,7 @@ export function Detail() {
                 )}
               </div>
             </div>
-            
+
             {complaint.resolution_evidence?.remarks && (
               <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Officer Remarks</div>
@@ -209,20 +217,20 @@ export function Detail() {
               {isRejected ? 'Disagree with rejection?' : 'Not fixed properly?'}
             </h3>
             <p className="text-sm text-slate-600 mb-4">
-              {isRejected 
-                ? 'If you believe this complaint was incorrectly rejected, you can appeal for another review.' 
+              {isRejected
+                ? 'If you believe this complaint was incorrectly rejected, you can appeal for another review.'
                 : 'If the issue persists or the evidence is incorrect, you can raise a dispute to reopen the case.'}
             </p>
             <form onSubmit={dispute} className="space-y-3">
-              <textarea 
-                required 
+              <textarea
+                required
                 className={`w-full text-sm p-4 border rounded-xl bg-slate-50 focus:ring-2 outline-none ${isRejected ? 'border-slate-300 focus:ring-orange-500 focus:border-orange-500' : 'border-slate-300 focus:ring-red-500 focus:border-red-500'}`}
                 placeholder={isRejected ? "Explain why this should not be rejected..." : "Explain why this is not resolved..."}
-                value={disputeRemarks} 
-                onChange={e => setDisputeRemarks(e.target.value)} 
+                value={disputeRemarks}
+                onChange={e => setDisputeRemarks(e.target.value)}
                 disabled={submitting}
               />
-              <button 
+              <button
                 disabled={submitting}
                 className={`text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-sm disabled:opacity-50 ${isRejected ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}
               >
@@ -258,6 +266,37 @@ export function Detail() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Related Reports */}
+        {relatedReports.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span>🔗</span> Possible Related Reports
+              </h2>
+              <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-1 rounded-full">{relatedReports.length}</span>
+            </div>
+            <div className="p-5">
+              <div className="space-y-3">
+                {relatedReports.map(r => (
+                  <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-mono font-bold text-slate-700">{r.public_id}</div>
+                      <div className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium whitespace-nowrap">{Math.round(r.distance_meters)}m away</div>
+                    </div>
+                    <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
+                      <span className="text-indigo-700">{r.category_name}</span>
+                      <span className={r.status === 'resolved' ? 'text-emerald-700' : 'text-slate-600'}>{r.status.replace('_', ' ')}</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
+                      <strong>Match:</strong> {r.match_reasons.join(' • ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

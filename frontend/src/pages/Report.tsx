@@ -21,14 +21,14 @@ L.Marker.prototype.options.icon = DefaultIcon
 
 type LocationSource = 'Device GPS' | 'Search' | 'Manual Map Pin' | null
 
-function LocationMarker({ 
-  pos, 
-  setPos, 
-  setSource 
-}: { 
-  pos: [number, number] | null, 
-  setPos: (pos: [number, number]) => void, 
-  setSource: (s: LocationSource) => void 
+function LocationMarker({
+  pos,
+  setPos,
+  setSource
+}: {
+  pos: [number, number] | null,
+  setPos: (pos: [number, number]) => void,
+  setSource: (s: LocationSource) => void
 }) {
   useMapEvents({
     click(e) {
@@ -36,10 +36,10 @@ function LocationMarker({
       setSource('Manual Map Pin')
     },
   })
-  
+
   return pos === null ? null : (
-    <Marker 
-      position={pos} 
+    <Marker
+      position={pos}
       draggable={true}
       eventHandlers={{
         dragend: (e) => {
@@ -72,14 +72,14 @@ function MapResizer({ pos, step }: { pos: [number, number] | null, step: number 
 export function Report() {
   const { token } = useAuth()
   const navigate = useNavigate()
-  
+
   const [step, setStep] = useState(1)
 
   // Step 1: Evidence
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState('')
   const [desc, setDesc] = useState('')
-  
+
   const [analyzeState, setAnalyzeState] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE')
   const [analysisError, setAnalysisError] = useState('')
   const [analysis, setAnalysis] = useState<AIAnalysisResponse | null>(null)
@@ -89,18 +89,22 @@ export function Report() {
   const [address, setAddress] = useState<string | null>(null)
   const [locationSource, setLocationSource] = useState<LocationSource>(null)
   const [accuracy, setAccuracy] = useState<number | null>(null)
-  
+
   // Search Autocomplete state
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
-  
+
   const [locationError, setLocationError] = useState<string | null>(null)
   const [isGpsLoading, setIsGpsLoading] = useState(false)
-  const [severity, setSeverity] = useState('medium')
-  
-  // Step 3: Review & Submit
+
+  // Step 3: Review & Related Reports
+  const [relatedReports, setRelatedReports] = useState<any[]>([])
+  const [checkingRelated, setCheckingRelated] = useState(false)
+  const [relatedError, setRelatedError] = useState('')
+
+  const [severity, setSeverity] = useState<string>('not_assessed')
   const [routingPreview, setRoutingPreview] = useState<RoutingPreview | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -137,7 +141,7 @@ export function Report() {
         setAddress(null)
       }
     }
-    
+
     const timeoutId = setTimeout(fetchAddress, 500)
     return () => clearTimeout(timeoutId)
   }, [pos, locationSource])
@@ -164,7 +168,7 @@ export function Report() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
-    
+
     const controller = new AbortController()
     abortControllerRef.current = controller
 
@@ -190,7 +194,7 @@ export function Report() {
     return () => clearTimeout(timeoutId)
   }, [searchQuery])
 
-  const accuracyQuality = accuracy !== null 
+  const accuracyQuality = accuracy !== null
     ? (accuracy <= 100 ? 'GOOD' : (accuracy <= 500 ? 'WARNING' : 'POOR'))
     : null
 
@@ -233,10 +237,10 @@ export function Report() {
     if (!file) return
     const fd = new FormData()
     fd.append('file', file)
-    
+
     setAnalyzeState('LOADING')
     setAnalysisError('')
-    
+
     try {
       const res = await api<AIAnalysisResponse>('/complaints/analyze', token, { method: 'POST', body: fd })
       setAnalysis(res)
@@ -285,7 +289,23 @@ export function Report() {
       alert("Please provide a description.")
       return
     }
+
     setStep(3)
+
+    // Check for related reports
+    if (analysis?.category_name && pos) {
+      setCheckingRelated(true)
+      setRelatedError('')
+      try {
+        const res = await api<any[]>(`/complaints/check-related?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
+        setRelatedReports(res)
+      } catch (err: any) {
+        console.warn("Failed to check related reports", err)
+        setRelatedError("Could not verify related reports")
+      } finally {
+        setCheckingRelated(false)
+      }
+    }
   }
 
   async function submitComplaint() {
@@ -302,7 +322,7 @@ export function Report() {
       if (address) fd.append('address', address)
       fd.append('category_name', analysis.category_name)
       fd.append('severity', severity)
-      
+
       const res = await api<any>('/complaints', token, { method: 'POST', body: fd })
       success = true
       setSubmittedId(res.public_id)
@@ -324,7 +344,7 @@ export function Report() {
 
   if (submittedId) {
     const isOutsidePMC = routingPreview?.assignment_status === "Not handled by PMC" || routingPreview?.assignment_status === "No municipal department"
-    
+
     return (
       <div className="max-w-md mx-auto bg-white min-h-screen p-6 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500">
         <div className={`w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-6 ${isOutsidePMC ? 'bg-amber-100' : 'bg-emerald-100'}`}>
@@ -334,7 +354,7 @@ export function Report() {
         <p className="text-slate-600 text-center mb-8">
           {isOutsidePMC ? 'This location is outside the supported PMC service area.' : 'Thank you for helping improve Pune.'}
         </p>
-        
+
         <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8">
           <div className="flex justify-between items-center mb-4">
             <span className="text-sm text-slate-500">Complaint Reference</span>
@@ -348,7 +368,7 @@ export function Report() {
             <span className="text-sm text-slate-500">Issue</span>
             <span className="font-semibold text-slate-900">{analysis?.category_name}</span>
           </div>
-          
+
           <div className="border-t border-slate-200 pt-4 mt-2">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Location & Routing</div>
             <div className="space-y-2">
@@ -380,8 +400,51 @@ export function Report() {
               </div>
             </div>
           </div>
+
+          {/* Related Reports Section */}
+          <div className="border-t border-slate-200 pt-4 mt-2">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex justify-between items-center">
+              <span>Possible Related Reports</span>
+              {checkingRelated && <span className="text-indigo-600 lowercase tracking-normal flex items-center gap-1">
+                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                checking...
+              </span>}
+            </div>
+
+            {!checkingRelated && relatedError && (
+               <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">{relatedError}</div>
+            )}
+
+            {!checkingRelated && !relatedError && relatedReports.length === 0 && (
+               <div className="text-sm text-slate-500 italic">No similar recent reports found nearby.</div>
+            )}
+
+            {!checkingRelated && !relatedError && relatedReports.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-amber-700 bg-amber-50 p-2 rounded-md mb-2">
+                  We found {relatedReports.length} recent {relatedReports.length === 1 ? 'report' : 'reports'} nearby that might be related to yours. You can still submit your report if it's a different issue.
+                </div>
+                {relatedReports.map(r => (
+                  <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50 relative overflow-hidden">
+                    <div className="flex justify-between mb-1">
+                      <span className="font-mono font-bold text-slate-700">{r.public_id.split('-')[0]}</span>
+                      <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium">{Math.round(r.distance_meters)}m away</span>
+                    </div>
+                    <div className="text-slate-600 capitalize">{r.status.replace('_', ' ')}</div>
+                    <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
+                      <strong>Reasons:</strong> {r.match_reasons.join(' • ')}
+                    </div>
+                    <a href={`/complaints/${r.public_id}`} target="_blank" rel="noreferrer" className="absolute top-3 right-3 text-indigo-600 hover:text-indigo-800">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
-        
+
         <button onClick={() => navigate('/my-reports')} className="w-full bg-slate-900 text-white font-bold p-4 rounded-xl shadow-lg hover:bg-slate-800 transition-colors">
           View My Reports
         </button>
@@ -426,8 +489,8 @@ export function Report() {
 
             {file && (
               <div className="space-y-4">
-                <button 
-                  onClick={analyzeImage} 
+                <button
+                  onClick={analyzeImage}
                   disabled={analyzeState === 'LOADING' || analyzeState === 'SUCCESS'}
                   className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
                     analyzeState === 'SUCCESS' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
@@ -466,7 +529,7 @@ export function Report() {
                         <div className="text-lg font-bold text-indigo-600">{(analysis.confidence * 100).toFixed(0)}%</div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Evidence</div>
                       <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{analysis.rationale}</p>
@@ -492,8 +555,8 @@ export function Report() {
                   </div>
                 )}
 
-                <button 
-                  onClick={() => setStep(2)} 
+                <button
+                  onClick={() => setStep(2)}
                   disabled={analyzeState !== 'SUCCESS'}
                   className="w-full bg-slate-900 text-white font-bold p-4 rounded-xl shadow hover:bg-slate-800 disabled:opacity-50 transition-colors"
                 >
@@ -508,18 +571,18 @@ export function Report() {
           <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
             <div>
               <label className="block text-sm font-semibold text-slate-900 mb-3">Choose Location</label>
-              
+
               <div className="flex flex-col gap-3 mb-4 relative z-20">
-                <button 
+                <button
                   onClick={useCurrentLocation}
                   disabled={isGpsLoading}
                   className="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 font-bold py-3 px-4 rounded-xl border border-indigo-200 hover:bg-indigo-100 transition-colors disabled:opacity-50"
                 >
                   {isGpsLoading ? 'Getting location...' : <><span>📍</span> Use My Current Location</>}
                 </button>
-                
+
                 <div className="relative">
-                  <input 
+                  <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => {
@@ -546,7 +609,7 @@ export function Report() {
                         const title = parts[0]
                         const subtitle = parts.slice(1).join(', ')
                         return (
-                          <div 
+                          <div
                             key={i}
                             onClick={() => handleSelectSearchResult(result)}
                             className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 flex gap-3 items-start"
@@ -570,14 +633,14 @@ export function Report() {
                   <p>{locationError}</p>
                 </div>
               )}
-              
+
               {accuracyQuality === 'POOR' && locationSource === 'Device GPS' && (
                 <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3">
                   <div className="text-amber-800 text-sm flex gap-3 items-start">
                     <span className="text-xl">⚠️</span>
                     <p><strong>Location accuracy is too low.</strong> Move to an open area or choose your location manually.</p>
                   </div>
-                  <button 
+                  <button
                     onClick={useCurrentLocation}
                     disabled={isGpsLoading}
                     className="self-start bg-amber-200 text-amber-900 font-bold px-4 py-2 rounded-lg hover:bg-amber-300 disabled:opacity-50 transition-colors text-sm"
@@ -589,8 +652,8 @@ export function Report() {
 
               <div className="h-[350px] md:h-[400px] w-full rounded-2xl overflow-hidden border-2 border-slate-200 shadow-sm z-0 relative isolate mb-4 bg-slate-100">
                 <MapContainer center={pos || [18.5204, 73.8567]} zoom={13} style={{ height: '100%', width: '100%', zIndex: 0 }}>
-                  <TileLayer 
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   />
                   <MapResizer pos={pos} step={step} />
@@ -611,7 +674,7 @@ export function Report() {
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Location Source</div>
                     <div className="text-sm font-bold text-indigo-700">{locationSource}</div>
                   </div>
-                  
+
                   <div>
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Coordinates</div>
                     <div className="text-sm font-mono text-slate-900">{pos[0].toFixed(5)}, {pos[1].toFixed(5)}</div>
@@ -636,7 +699,7 @@ export function Report() {
                       )}
                     </div>
                   )}
-                  
+
                   <div>
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Address</div>
                     <div className="text-sm text-slate-900 font-medium">
@@ -649,12 +712,12 @@ export function Report() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-900 mb-2">Description</label>
-              <textarea 
-                className="w-full border border-slate-300 rounded-xl text-sm p-4 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" 
-                rows={3} 
-                placeholder="Add any helpful details about the issue..." 
-                value={desc} 
-                onChange={e => setDesc(e.target.value)} 
+              <textarea
+                className="w-full border border-slate-300 rounded-xl text-sm p-4 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                rows={3}
+                placeholder="Add any helpful details about the issue..."
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
               />
             </div>
 
@@ -673,8 +736,8 @@ export function Report() {
 
             <div className="flex gap-3 relative z-10">
               <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors">Back</button>
-              <button 
-                onClick={goToReview} 
+              <button
+                onClick={goToReview}
                 disabled={!pos || !desc.trim()}
                 className="flex-1 bg-slate-900 text-white font-bold p-4 rounded-xl shadow hover:bg-slate-800 disabled:opacity-50 transition-colors"
               >
@@ -691,7 +754,7 @@ export function Report() {
                 IMAGE
               </div>
               <img src={preview} className="w-full h-48 object-cover" alt="Evidence" />
-              
+
               <div className="p-4 border-b border-slate-100">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">ISSUE</div>
                 <div className="text-lg font-bold text-slate-900 mb-2">{analysis?.category_name}</div>
@@ -789,8 +852,8 @@ export function Report() {
 
             <div className="flex gap-3">
               <button onClick={() => setStep(2)} disabled={submitting} className="px-6 py-4 rounded-xl font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 transition-colors">Back</button>
-              <button 
-                onClick={submitComplaint} 
+              <button
+                onClick={submitComplaint}
                 disabled={submitting || loadingPreview}
                 className="flex-1 bg-emerald-600 text-white font-bold p-4 rounded-xl shadow-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors flex justify-center items-center gap-2"
               >
