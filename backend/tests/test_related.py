@@ -154,3 +154,59 @@ async def test_admin_access_related(mock_related):
             assert resp.status_code == 200
             data = resp.json()
             assert len(data) == 2
+
+@pytest.mark.anyio
+async def test_bibwewadi_vit_regression():
+    """
+    Regression test: real VIT/Bibwewadi location (18.4637697, 73.8682067)
+    must return >= 1 related Pothole / Road Damage complaint from live DB.
+    This test runs against the real database (not mocked session).
+    It verifies that the endpoint is not blocked by route shadowing,
+    that category_by_name resolves 'Pothole / Road Damage', and that
+    distance/lookback filtering returns real matches.
+    """
+    # Only mock auth, use real DB session
+    async def override_get_user():
+        return User(id=uuid.uuid4(), email="citizen@test.local", name="Test", role=UserRole.CITIZEN)
+
+    app.dependency_overrides[get_current_user] = override_get_user
+
+    # Use a test-local engine/session to avoid cross-test event loop issues with asyncpg
+    async def override_get_session():
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+        from sqlalchemy.orm import sessionmaker
+        from app.core.config import get_settings
+
+        engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            yield session
+        await engine.dispose()
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(
+            "/api/complaints/check-related"
+            "?latitude=18.4637697"
+            "&longitude=73.8682067"
+            "&category_name=Pothole%20%2F%20Road%20Damage"
+        )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert isinstance(data, list), "Response must be a list"
+        assert len(data) >= 1, (
+            f"Expected >= 1 related complaint at 18.4637697, 73.8682067 within 200m "
+            f"and 7 days for 'Pothole / Road Damage', got 0. "
+            f"Check: (a) recent DB data exists, (b) distance rule is <=200m, "
+            f"(c) category name matches canonical 'Pothole / Road Damage'."
+        )
+        # Verify response structure and privacy
+        for item in data:
+            assert "public_id" in item
+            assert "distance_meters" in item
+            assert "match_score" in item
+            assert "match_reasons" in item
+            assert item["distance_meters"] <= 200.0
+            assert "citizen_id" not in item
+            assert "email" not in item

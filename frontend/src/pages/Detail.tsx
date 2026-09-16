@@ -282,18 +282,20 @@ export function Detail() {
             <div className="p-5">
               <div className="space-y-3">
                 {relatedReports.map(r => (
-                  <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50">
+                  <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50 relative overflow-hidden">
                     <div className="flex justify-between items-start mb-1">
-                      <div className="font-mono font-bold text-slate-700">{r.public_id}</div>
+                      <div>
+                        <div className="font-mono font-bold text-slate-700">{r.public_id}</div>
+                        <div className="text-slate-600 capitalize text-xs mt-0.5">{r.status.replace(/_/g, ' ')}</div>
+                      </div>
                       <div className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium whitespace-nowrap">{Math.round(r.distance_meters)}m away</div>
                     </div>
-                    <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
-                      <span className="text-indigo-700">{r.category_name}</span>
-                      <span className={r.status === 'resolved' ? 'text-emerald-700' : 'text-slate-600'}>{r.status.replace('_', ' ')}</span>
-                    </div>
                     <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
-                      <strong>Match:</strong> {r.match_reasons.join(' • ')}
+                      <strong>Reasons:</strong> {r.match_reasons.join(' • ')}
                     </div>
+                    <a href={`/complaints/${r.public_id}`} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs font-bold bg-white border border-slate-300 text-slate-700 py-1.5 rounded hover:bg-slate-50 transition-colors">
+                      View Complaint &rarr;
+                    </a>
                   </div>
                 ))}
               </div>

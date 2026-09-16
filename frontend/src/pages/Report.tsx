@@ -401,47 +401,7 @@ export function Report() {
             </div>
           </div>
 
-          {/* Related Reports Section */}
-          <div className="border-t border-slate-200 pt-4 mt-2">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex justify-between items-center">
-              <span>Possible Related Reports</span>
-              {checkingRelated && <span className="text-indigo-600 lowercase tracking-normal flex items-center gap-1">
-                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                checking...
-              </span>}
-            </div>
 
-            {!checkingRelated && relatedError && (
-               <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">{relatedError}</div>
-            )}
-
-            {!checkingRelated && !relatedError && relatedReports.length === 0 && (
-               <div className="text-sm text-slate-500 italic">No similar recent reports found nearby.</div>
-            )}
-
-            {!checkingRelated && !relatedError && relatedReports.length > 0 && (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-amber-700 bg-amber-50 p-2 rounded-md mb-2">
-                  We found {relatedReports.length} recent {relatedReports.length === 1 ? 'report' : 'reports'} nearby that might be related to yours. You can still submit your report if it's a different issue.
-                </div>
-                {relatedReports.map(r => (
-                  <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50 relative overflow-hidden">
-                    <div className="flex justify-between mb-1">
-                      <span className="font-mono font-bold text-slate-700">{r.public_id.split('-')[0]}</span>
-                      <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium">{Math.round(r.distance_meters)}m away</span>
-                    </div>
-                    <div className="text-slate-600 capitalize">{r.status.replace('_', ' ')}</div>
-                    <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
-                      <strong>Reasons:</strong> {r.match_reasons.join(' • ')}
-                    </div>
-                    <a href={`/complaints/${r.public_id}`} target="_blank" rel="noreferrer" className="absolute top-3 right-3 text-indigo-600 hover:text-indigo-800">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
         </div>
 
@@ -845,6 +805,49 @@ export function Report() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Possible Related Reports Section */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Possible Related Reports</span>
+                {checkingRelated && <span className="text-indigo-600 lowercase tracking-normal flex items-center gap-1">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                  checking...
+                </span>}
+              </div>
+              <div className="p-4">
+                {!checkingRelated && relatedError && (
+                   <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">{relatedError}</div>
+                )}
+                {!checkingRelated && !relatedError && relatedReports?.length === 0 && (
+                   <div className="text-sm text-slate-500 italic">No similar recent reports found nearby.</div>
+                )}
+                {!checkingRelated && !relatedError && relatedReports?.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium text-amber-700 bg-amber-50 p-2 rounded-md mb-2">
+                      We found {relatedReports?.length} recent {relatedReports?.length === 1 ? 'report' : 'reports'} nearby that might be related to yours. You can still submit your report if it's a different issue.
+                    </div>
+                    {relatedReports?.map(r => (
+                      <div key={r.public_id} className="text-sm border border-slate-200 rounded-md p-3 bg-slate-50 relative overflow-hidden">
+                        <div className="flex justify-between items-start mb-1">
+                          <div>
+                            <div className="font-mono font-bold text-slate-700">{r.public_id}</div>
+                            <div className="text-slate-600 capitalize text-xs mt-0.5">{r.status.replace(/_/g, ' ')}</div>
+                          </div>
+                          <div className="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full font-medium whitespace-nowrap">{Math.round(r.distance_meters)}m away</div>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
+                          <strong>Reasons:</strong> {r.match_reasons.join(' • ')}
+                        </div>
+                        <a href={`/complaints/${r.public_id}`} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs font-bold bg-white border border-slate-300 text-slate-700 py-1.5 rounded hover:bg-slate-50 transition-colors">
+                          View Complaint &rarr;
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
