@@ -281,7 +281,7 @@ describe('Report Location & UX Flow', () => {
     
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
     await waitFor(() => {
-      expect(screen.getByText(/Gemini temporarily unavailable/i)).toBeInTheDocument()
+      expect(screen.getByText(/Cloud classification unavailable/i)).toBeInTheDocument()
       expect(screen.getAllByText(/Local Fallback/i).length).toBeGreaterThan(0)
       expect(screen.getAllByText(/resnet50/i).length).toBeGreaterThan(0)
     })

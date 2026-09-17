@@ -40,14 +40,32 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markRead = async (id: string) => {
     if (!token) return
-    await api(`/notifications/${id}/read`, token, { method: 'PATCH' })
+
+    // Optimistic update
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+
+    try {
+      await api(`/notifications/${id}/read`, token, { method: 'PATCH' })
+    } catch (e) {
+      console.error(e)
+      // Revert on error by refetching
+      refreshNotifications()
+    }
   }
 
   const markAllRead = async () => {
     if (!token) return
-    await api('/notifications/read-all', token, { method: 'PATCH' })
+
+    // Optimistic update
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+
+    try {
+      await api('/notifications/read-all', token, { method: 'PATCH' })
+    } catch (e) {
+      console.error(e)
+      // Revert on error
+      refreshNotifications()
+    }
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length

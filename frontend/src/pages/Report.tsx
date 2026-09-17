@@ -498,7 +498,7 @@ export function Report() {
                     <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span>
-                          <span className="font-semibold text-slate-700">Provider:</span> {analysis.provider === 'gemini' ? 'Gemini' : 'Local Fallback'}
+                          <span className="font-semibold text-slate-700">Provider:</span> {analysis.provider === 'gemini' ? 'Gemini' : analysis.provider === 'local' ? 'Local Fallback' : analysis.provider}
                         </span>
                         <span>
                           <span className="font-semibold text-slate-700">Model:</span> {analysis.model}
@@ -509,7 +509,7 @@ export function Report() {
                     {analysis.provider === 'fallback' && (
                       <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
                         <span className="text-base mt-0.5">⚠️</span>
-                        <span>Gemini temporarily unavailable — local fallback used.</span>
+                        <span>Cloud classification unavailable — local fallback used.</span>
                       </div>
                     )}
                   </div>
@@ -725,7 +725,7 @@ export function Report() {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold">Provider</span>
-                    <span>{analysis ? (analysis.provider === 'gemini' ? 'Gemini' : 'Local Fallback') : 'Not reported'}</span>
+                    <span>{analysis ? (analysis.provider === 'gemini' ? 'Gemini' : analysis.provider === 'local' ? 'Local Fallback' : analysis.provider) : 'Not reported'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold">Model</span>
