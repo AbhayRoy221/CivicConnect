@@ -14,6 +14,7 @@ export function ComplaintsQueue() {
   const [departmentId, setDepartmentId] = useState('')
   const [authority, setAuthority] = useState('')
   const [status, setStatus] = useState('')
+  const [sortBy, setSortBy] = useState('created_at')
   
   const [departments, setDepartments] = useState<any[]>([])
 
@@ -23,13 +24,14 @@ export function ComplaintsQueue() {
 
   useEffect(() => {
     load()
-  }, [token, departmentId, authority, status])
+  }, [token, departmentId, authority, status, sortBy])
 
   async function load() {
     let url = '/officer/complaints?'
     if (departmentId) url += `department_id=${departmentId}&`
     if (authority) url += `authority=${authority}&`
     if (status) url += `status=${status}&`
+    if (sortBy) url += `sort_by=${sortBy}&`
     
     try {
       const res = await api<Complaint[]>(url.slice(0, -1), token)
@@ -77,6 +79,13 @@ export function ComplaintsQueue() {
               <option value="rejected">Rejected</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Sort By</label>
+            <select className="border border-slate-300 rounded-lg text-sm p-2 w-40" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="created_at">Newest First</option>
+              <option value="priority">Priority: High → Low</option>
+            </select>
+          </div>
           <button onClick={load} className="bg-slate-900 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-slate-800 transition-colors">
             Refresh
           </button>
@@ -96,6 +105,7 @@ export function ComplaintsQueue() {
                 <th className="p-4 font-bold text-slate-600">Admin Ward</th>
                 <th className="p-4 font-bold text-slate-600">Zone</th>
                 <th className="p-4 font-bold text-slate-600">Severity</th>
+                <th className="p-4 font-bold text-slate-600">Priority</th>
                 <th className="p-4 font-bold text-slate-600">Status</th>
                 <th className="p-4 font-bold text-slate-600">Assignment</th>
                 <th className="p-4 font-bold text-slate-600">Created At</th>
@@ -134,6 +144,14 @@ export function ComplaintsQueue() {
                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.severity === 'high' || c.severity === 'critical' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
                         {c.severity || 'MEDIUM'}
                       </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-slate-800">{c.effective_priority ?? c.priority_score ?? 0}</span>
+                        {c.admin_priority_override !== null && c.admin_priority_override !== undefined && (
+                          <span className="text-[10px] font-bold text-purple-600" title="Admin Override Active">★</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${

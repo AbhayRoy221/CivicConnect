@@ -110,7 +110,7 @@ def _response(
     evidence: ResolutionEvidence | None = None,
     officer: User | None = None,
 ) -> ComplaintResponse:
-    return ComplaintResponse(
+    resp = ComplaintResponse(
         id=complaint.id,
         public_id=complaint.public_id,
         citizen_id=complaint.citizen_id,
@@ -142,7 +142,18 @@ def _response(
         updated_at=complaint.updated_at,
         resolved_at=complaint.resolved_at,
         resolution_evidence=ResolutionEvidenceResponse.model_validate(evidence) if evidence else None,
+        priority_score=complaint.base_priority_score or 0,
+        priority_reasons=complaint.base_priority_reasons,
+        admin_priority_override=complaint.admin_priority_override,
+        admin_priority_remarks=complaint.admin_priority_remarks,
+        effective_priority=0, # Placeholder, will be computed below
     )
+    from app.priority import get_effective_priority
+    eff_pri, all_reasons, engine_pri = get_effective_priority(complaint)
+    resp.effective_priority = eff_pri
+    resp.priority_score = engine_pri
+    resp.priority_reasons = all_reasons
+    return resp
 
 
 async def _get_complaint(session: AsyncSession, complaint_ref: str) -> Complaint:
@@ -404,6 +415,17 @@ async def create_complaint(
             department_id=category.default_department_id,
             officer_id=assigned_officer.id if assigned_officer else None,
         )
+
+        from app.priority import calculate_base_priority
+        related_count = 0
+        if latitude is not None and longitude is not None:
+            related = await find_related_complaints(session, latitude, longitude, category.id)
+            related_count = len(related)
+        
+        base_score, base_reasons = calculate_base_priority(complaint, related_count)
+        complaint.base_priority_score = base_score
+        complaint.base_priority_reasons = base_reasons
+
         session.add(complaint)
         await session.flush()
 
@@ -528,6 +550,32 @@ async def update_severity(complaint_ref: str, payload: SeverityUpdateRequest, cu
 
     complaint.severity = payload.severity
     await audit(session, current_user.id, "severity_change", "complaint", str(complaint.id), {"from": old_severity.value, "to": payload.severity.value, "remarks": payload.remarks})
+    
+    # Also update base priority score when severity changes
+    from app.priority import calculate_base_priority
+    related_count = 0
+    if complaint.latitude is not None and complaint.longitude is not None:
+        related = await find_related_complaints(session, complaint.latitude, complaint.longitude, complaint.category_id)
+        related_count = len(related)
+    base_score, base_reasons = calculate_base_priority(complaint, related_count)
+    complaint.base_priority_score = base_score
+    complaint.base_priority_reasons = base_reasons
+
+    await session.commit()
+    await session.refresh(complaint)
+    return await _complaint_response(session, complaint)
+
+
+from app.schemas import PriorityOverrideRequest
+
+@router.patch("/complaints/{complaint_ref}/priority", response_model=ComplaintResponse)
+async def update_priority(complaint_ref: str, payload: PriorityOverrideRequest, current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
+    complaint = await _get_complaint(session, complaint_ref)
+
+    complaint.admin_priority_override = payload.override_score
+    complaint.admin_priority_remarks = payload.remarks
+    
+    await audit(session, current_user.id, "priority_override", "complaint", str(complaint.id), {"override_score": payload.override_score, "remarks": payload.remarks})
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -610,6 +658,16 @@ async def dispute_complaint(
     notif_msg = f"{'Appeal' if is_appeal else 'Dispute'} for {complaint.public_id} recorded. It is now escalated for review."
     await notify(session, complaint.citizen_id, complaint.id, notif_title, notif_msg)
 
+    # Recalculate priority due to escalation
+    from app.priority import calculate_base_priority
+    related_count = 0
+    if complaint.latitude is not None and complaint.longitude is not None:
+        related = await find_related_complaints(session, complaint.latitude, complaint.longitude, complaint.category_id)
+        related_count = len(related)
+    base_score, base_reasons = calculate_base_priority(complaint, related_count)
+    complaint.base_priority_score = base_score
+    complaint.base_priority_reasons = base_reasons
+
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -673,10 +731,27 @@ async def officer_queue(
     status: str | None = None,
     severity: str | None = None,
     category_id: uuid.UUID | None = None,
+    sort_by: str | None = None,
     current_user: User = Depends(require_roles(UserRole.MUNICIPAL_OFFICER, UserRole.ADMINISTRATOR)),
     session: AsyncSession = Depends(get_session)
 ):
-    query = select(Complaint).order_by(Complaint.created_at.desc())
+    query = select(Complaint)
+    
+    if sort_by == "priority":
+        from sqlalchemy import case
+        sla_seconds = func.extract('epoch', Complaint.sla_due_at - func.now())
+        sla_bonus = case(
+            (sla_seconds < 0, 25),
+            (sla_seconds <= 86400, 15),
+            (sla_seconds <= 172800, 5),
+            else_=0
+        )
+        engine_score = Complaint.base_priority_score + sla_bonus
+        engine_score_clamped = case((engine_score > 100, 100), else_=engine_score)
+        effective_priority = func.coalesce(Complaint.admin_priority_override, engine_score_clamped)
+        query = query.order_by(effective_priority.desc(), Complaint.created_at.desc())
+    else:
+        query = query.order_by(Complaint.created_at.desc())
 
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
         if current_user.department_id:

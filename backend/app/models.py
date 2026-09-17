@@ -158,6 +158,11 @@ class Complaint(Base):
 
     geographic_ward_number: Mapped[int | None] = mapped_column(Integer)
 
+    base_priority_score: Mapped[int] = mapped_column(Integer, default=0, server_default='0', nullable=False)
+    base_priority_reasons: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
+    admin_priority_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    admin_priority_remarks: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
 
 class ComplaintStatusHistory(Base):
     __tablename__ = "complaint_status_history"

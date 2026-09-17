@@ -81,6 +81,18 @@ export function OperationsDetail() {
     } catch (e: any) { alert(e.message) }
   }
 
+  async function updatePriorityOverride(override: number | null) {
+    try {
+      const reason = override !== null ? window.prompt("Reason for priority override:") : "Cleared by admin";
+      if (reason === null) return;
+      await api(`/complaints/${c?.public_id}/priority`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ override_score: override, remarks: reason })
+      })
+      load()
+    } catch (e: any) { alert(e.message) }
+  }
+
   async function assign(e: React.FormEvent) {
     e.preventDefault()
     try {
@@ -204,6 +216,59 @@ export function OperationsDetail() {
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Final Severity</div>
                     <div className="text-sm font-bold text-indigo-700">{c.severity?.toUpperCase()}</div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">Priority Engine Assessment</h2>
+              {isAdmin && (
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    const val = window.prompt("Enter Priority Override (0-100):");
+                    if (val !== null) updatePriorityOverride(parseInt(val, 10));
+                  }} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100">
+                    Update Priority Override
+                  </button>
+                  {c.admin_priority_override !== null && c.admin_priority_override !== undefined && (
+                    <button onClick={() => updatePriorityOverride(null)} className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg hover:bg-slate-100">
+                      Clear Override
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="p-5 flex flex-col md:flex-row gap-8">
+              <div className="flex-shrink-0 text-left min-w-[200px]">
+                <div className="text-sm font-bold text-slate-700 mb-2">
+                  Effective Priority: <span className="text-xl text-indigo-600">{c.effective_priority ?? c.priority_score ?? 0} / 100</span>
+                </div>
+                <div className="text-sm font-bold text-slate-700 mb-4">
+                  Engine Priority: <span className="text-xl text-slate-600">{c.priority_score ?? 0} / 100</span>
+                </div>
+                
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reasons:</div>
+                <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4 mb-4">
+                  {Array.isArray(c.priority_reasons) ? c.priority_reasons.map((r, i) => (
+                    <li key={i}><span className="font-semibold">{r.signal}:</span> {r.description} (+{r.points})</li>
+                  )) : (
+                    <li className="italic">No priority signals recorded</li>
+                  )}
+                </ul>
+
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  {c.admin_priority_override !== null && c.admin_priority_override !== undefined ? (
+                    <div>
+                      <div className="text-sm font-bold text-purple-700 mb-1">Admin Override: {c.admin_priority_override}</div>
+                      {c.admin_priority_remarks && (
+                        <div className="text-xs text-slate-500">Reason: {c.admin_priority_remarks}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm font-bold text-slate-500">Admin Override: —</div>
+                  )}
                 </div>
               </div>
             </div>

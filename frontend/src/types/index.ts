@@ -54,6 +54,11 @@ export type Complaint = {
   sla_due_at?: string
   citizen_reported_severity?: string
   system_assessed_severity?: string
+  priority_score?: number
+  priority_reasons?: any[]
+  admin_priority_override?: number
+  admin_priority_remarks?: string
+  effective_priority?: number
 }
 
 export type ResolutionEvidence = {

@@ -10,7 +10,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     { label: 'Dashboard', path: '/admin', roles: ['administrator'] },
     { label: 'Analytics', path: '/admin/analytics', roles: ['administrator', 'municipal_officer'] },
     { label: 'Queue', path: '/admin/queue', roles: ['administrator', 'municipal_officer'] },
-    { label: 'Operations Map', path: '/admin/map', roles: ['administrator', 'municipal_officer'] },
+    { label: 'Operations Map', path: '/admin/map', roles: ['administrator'] },
     { label: 'Users', path: '/admin/users', roles: ['administrator'] },
     { label: 'Audit Logs', path: '/admin/audit', roles: ['administrator'] },
   ]

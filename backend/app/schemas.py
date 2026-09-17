@@ -129,6 +129,13 @@ class ComplaintResponse(BaseModel):
     updated_at: datetime
     resolved_at: datetime | None
     resolution_evidence: ResolutionEvidenceResponse | None = None
+    
+    # Priority Engine
+    priority_score: int = 0
+    priority_reasons: list | dict | None = None
+    admin_priority_override: int | None = None
+    admin_priority_remarks: str | None = None
+    effective_priority: int = 0
 
 
 class StatusUpdateRequest(BaseModel):
@@ -139,6 +146,11 @@ class StatusUpdateRequest(BaseModel):
 class SeverityUpdateRequest(BaseModel):
     severity: CaseInsensitiveSeverity
     remarks: str | None = Field(default=None, max_length=2000)
+
+
+class PriorityOverrideRequest(BaseModel):
+    override_score: int | None = Field(default=None, ge=0, le=100, description="Override score 0-100, or null to clear")
+    remarks: str | None = Field(default=None, max_length=500)
 
 
 class DisputeRequest(BaseModel):
