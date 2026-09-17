@@ -122,6 +122,53 @@ async def notify(session: AsyncSession, user_id, complaint_id, title: str, messa
     session.add(Notification(user_id=user_id, complaint_id=complaint_id, title=title, message=message))
 
 
+async def emit_operational_alert(
+    session: AsyncSession,
+    user_id: uuid.UUID | str,
+    complaint_id: uuid.UUID | str,
+    title: str,
+    message: str,
+    event_type: str,
+    event_key: str
+) -> None:
+    existing = await session.scalar(
+        select(Notification).where(
+            Notification.complaint_id == complaint_id,
+            Notification.event_type == event_type,
+            Notification.event_key == event_key
+        )
+    )
+    if existing:
+        return
+    session.add(Notification(
+        user_id=user_id,
+        complaint_id=complaint_id,
+        title=title,
+        message=message,
+        event_type=event_type,
+        event_key=event_key
+    ))
+
+async def check_and_emit_priority_alert(
+    session: AsyncSession,
+    complaint: "Complaint", # type hint avoiding circular import
+    old_priority: int,
+    new_priority: int
+):
+    from app.models import NotificationEventType, User, UserRole
+    if old_priority < 80 and new_priority >= 80:
+        event_key = f"priority-threshold:{complaint.id}:{new_priority}"
+        title = "Complaint priority crossed 80"
+        message = f"Complaint {complaint.public_id} reached high priority ({new_priority})."
+        
+        if complaint.officer_id:
+            await emit_operational_alert(session, complaint.officer_id, complaint.id, title, message, NotificationEventType.HIGH_PRIORITY.value, event_key)
+        else:
+            from sqlalchemy import select
+            admins = (await session.scalars(select(User).where(User.role == UserRole.ADMINISTRATOR))).all()
+            for admin in admins:
+                await emit_operational_alert(session, admin.id, complaint.id, title, message, NotificationEventType.HIGH_PRIORITY.value, event_key)
+
 async def audit(session: AsyncSession, actor_id, action: str, entity_type: str, entity_id: str, metadata=None) -> None:
     session.add(
         AuditLog(

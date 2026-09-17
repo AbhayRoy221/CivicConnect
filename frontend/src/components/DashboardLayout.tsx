@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationContext'
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
+  const { unreadCount } = useNotifications()
   const location = useLocation()
   
   const navItems = [
@@ -22,9 +24,19 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div className="p-6">
-          <Link to="/" className="text-xl font-bold text-white flex items-center gap-2">
-            <span className="text-emerald-400">🌿</span> CivicConnect
-          </Link>
+          <div className="flex justify-between items-center">
+            <Link to="/" className="text-xl font-bold text-white flex items-center gap-2">
+              <span className="text-emerald-400">🌿</span> CivicConnect
+            </Link>
+            <Link to="/notifications" className="text-slate-400 hover:text-white relative" title="Notifications">
+              🔔
+              {unreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </Link>
+          </div>
           <div className="mt-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
             <div className="text-white font-bold text-sm truncate">{user?.name}</div>
             <div className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">{user?.role.replace('_', ' ')}</div>

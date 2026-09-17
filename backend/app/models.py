@@ -188,6 +188,14 @@ class DuplicateLink(Base):
     )
 
 
+class NotificationEventType(str, enum.Enum):
+    CRITICAL_SEVERITY = "CRITICAL_SEVERITY"
+    HIGH_PRIORITY = "HIGH_PRIORITY"
+    ESCALATED = "ESCALATED"
+    DISPUTED = "DISPUTED"
+    RELATED_SPIKE = "RELATED_SPIKE"
+    GENERAL = "GENERAL"
+
 class Notification(Base):
     __tablename__ = "notifications"
 
@@ -198,6 +206,8 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     is_read: Mapped[bool] = mapped_column("read", Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, default=NotificationEventType.GENERAL.value, server_default=NotificationEventType.GENERAL.value)
+    event_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class ResolutionEvidence(Base):

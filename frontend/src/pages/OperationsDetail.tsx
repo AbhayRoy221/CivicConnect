@@ -348,18 +348,15 @@ export function OperationsDetail() {
                 <div>
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">SLA Status</div>
                   {(() => {
-                    const due = new Date(c.sla_due_at).getTime();
-                    const now = Date.now();
-                    const isResolved = !!c.resolved_at;
-                    const hoursLeft = (due - now) / (1000 * 60 * 60);
+                    const isResolved = !!c.resolved_at || c.status === 'rejected';
 
-                    let statusObj = { label: 'On track', color: 'bg-emerald-100 text-emerald-700' };
+                    let statusObj = { label: 'ON TRACK', color: 'bg-emerald-100 text-emerald-700' };
                     if (isResolved) {
-                      statusObj = { label: 'Resolved', color: 'bg-slate-100 text-slate-700' };
-                    } else if (hoursLeft < 0) {
-                      statusObj = { label: 'Overdue', color: 'bg-red-100 text-red-700 font-bold animate-pulse' };
-                    } else if (hoursLeft < 24) {
-                      statusObj = { label: 'Due soon', color: 'bg-amber-100 text-amber-700 font-bold' };
+                      statusObj = { label: 'RESOLVED', color: 'bg-slate-100 text-slate-700' };
+                    } else if (c.is_sla_breached) {
+                      statusObj = { label: 'OVERDUE', color: 'bg-red-100 text-red-700 font-bold animate-pulse' };
+                    } else if (c.is_sla_approaching) {
+                      statusObj = { label: 'DUE SOON', color: 'bg-amber-100 text-amber-700 font-bold' };
                     }
 
                     return (

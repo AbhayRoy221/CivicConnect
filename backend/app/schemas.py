@@ -137,6 +137,10 @@ class ComplaintResponse(BaseModel):
     admin_priority_remarks: str | None = None
     effective_priority: int = 0
 
+    # Dynamic SLA
+    is_sla_breached: bool = False
+    is_sla_approaching: bool = False
+
 
 class StatusUpdateRequest(BaseModel):
     status: ComplaintStatus

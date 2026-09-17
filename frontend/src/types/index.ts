@@ -59,6 +59,8 @@ export type Complaint = {
   admin_priority_override?: number
   admin_priority_remarks?: string
   effective_priority?: number
+  is_sla_breached?: boolean
+  is_sla_approaching?: boolean
 }
 
 export type ResolutionEvidence = {

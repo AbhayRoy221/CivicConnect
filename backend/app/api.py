@@ -153,6 +153,16 @@ def _response(
     resp.effective_priority = eff_pri
     resp.priority_score = engine_pri
     resp.priority_reasons = all_reasons
+
+    if complaint.sla_due_at and complaint.status not in (ComplaintStatus.RESOLVED, ComplaintStatus.REJECTED):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        delta = complaint.sla_due_at - now
+        if delta.total_seconds() < 0:
+            resp.is_sla_breached = True
+        elif delta.total_seconds() <= 14400: # 4 hours
+            resp.is_sla_approaching = True
+
     return resp
 
 
@@ -448,6 +458,39 @@ async def create_complaint(
         await audit(session, current_user.id, "create", "complaint", str(complaint.id))
         await notify(session, current_user.id, complaint.id, "Complaint Submitted", f"Your complaint {complaint.public_id} has been submitted successfully.")
 
+        # Event-driven alerts
+        from app.models import NotificationEventType
+        from app.services import emit_operational_alert
+        if severity_enum == Severity.CRITICAL:
+            event_key = f"critical-creation:{complaint.id}"
+            title = "Critical severity complaint created"
+            message = f"Complaint {complaint.public_id} was submitted with CRITICAL severity."
+            if assigned_officer:
+                await emit_operational_alert(session, assigned_officer.id, complaint.id, title, message, NotificationEventType.CRITICAL_SEVERITY.value, event_key)
+            else:
+                admins = (await session.scalars(select(User).where(User.role == UserRole.ADMINISTRATOR))).all()
+                for admin in admins:
+                    await emit_operational_alert(session, admin.id, complaint.id, title, message, NotificationEventType.CRITICAL_SEVERITY.value, event_key)
+                    
+        # RELATED_SPIKE threshold crossing
+        if related_count == 4: # Previous count was 4, this new one makes it 5 (the threshold)
+            event_key = f"related-spike:{complaint.category_id}:{complaint.ward_id}" # or just unique key
+            # To be simpler and idempotent for this specific complaint triggering it:
+            event_key = f"related-threshold:{complaint.id}"
+            title = "Related complaint spike detected"
+            message = f"Complaint {complaint.public_id} triggered a spike (5+ related complaints) in its area."
+            if assigned_officer:
+                await emit_operational_alert(session, assigned_officer.id, complaint.id, title, message, NotificationEventType.RELATED_SPIKE.value, event_key)
+            else:
+                admins = (await session.scalars(select(User).where(User.role == UserRole.ADMINISTRATOR))).all()
+                for admin in admins:
+                    await emit_operational_alert(session, admin.id, complaint.id, title, message, NotificationEventType.RELATED_SPIKE.value, event_key)
+
+        from app.priority import get_effective_priority
+        from app.services import check_and_emit_priority_alert
+        new_eff_pri, _, _ = get_effective_priority(complaint)
+        await check_and_emit_priority_alert(session, complaint, 0, new_eff_pri)
+
         await session.commit()
         await session.refresh(complaint)
         return await _complaint_response(session, complaint)
@@ -548,6 +591,9 @@ async def update_severity(complaint_ref: str, payload: SeverityUpdateRequest, cu
     if old_severity == payload.severity:
         return await _complaint_response(session, complaint)
 
+    from app.priority import get_effective_priority
+    old_eff_pri, _, _ = get_effective_priority(complaint)
+
     complaint.severity = payload.severity
     await audit(session, current_user.id, "severity_change", "complaint", str(complaint.id), {"from": old_severity.value, "to": payload.severity.value, "remarks": payload.remarks})
     
@@ -561,6 +607,10 @@ async def update_severity(complaint_ref: str, payload: SeverityUpdateRequest, cu
     complaint.base_priority_score = base_score
     complaint.base_priority_reasons = base_reasons
 
+    new_eff_pri, _, _ = get_effective_priority(complaint)
+    from app.services import check_and_emit_priority_alert
+    await check_and_emit_priority_alert(session, complaint, old_eff_pri, new_eff_pri)
+
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -571,11 +621,21 @@ from app.schemas import PriorityOverrideRequest
 @router.patch("/complaints/{complaint_ref}/priority", response_model=ComplaintResponse)
 async def update_priority(complaint_ref: str, payload: PriorityOverrideRequest, current_user: User = Depends(require_roles(UserRole.ADMINISTRATOR)), session: AsyncSession = Depends(get_session)):
     complaint = await _get_complaint(session, complaint_ref)
-
-    complaint.admin_priority_override = payload.override_score
-    complaint.admin_priority_remarks = payload.remarks
     
-    await audit(session, current_user.id, "priority_override", "complaint", str(complaint.id), {"override_score": payload.override_score, "remarks": payload.remarks})
+    from app.priority import get_effective_priority
+    old_eff_pri, _, _ = get_effective_priority(complaint)
+
+    old_val = complaint.admin_priority_override
+    if old_val == payload.override_score:
+        return await _complaint_response(session, complaint)
+    
+    complaint.admin_priority_override = payload.override_score
+    await audit(session, current_user.id, "priority_override", "complaint", str(complaint.id), {"from": old_val, "to": payload.override_score, "remarks": payload.remarks})
+    
+    new_eff_pri, _, _ = get_effective_priority(complaint)
+    from app.services import check_and_emit_priority_alert
+    await check_and_emit_priority_alert(session, complaint, old_eff_pri, new_eff_pri)
+
     await session.commit()
     await session.refresh(complaint)
     return await _complaint_response(session, complaint)
@@ -658,8 +718,26 @@ async def dispute_complaint(
     notif_msg = f"{'Appeal' if is_appeal else 'Dispute'} for {complaint.public_id} recorded. It is now escalated for review."
     await notify(session, complaint.citizen_id, complaint.id, notif_title, notif_msg)
 
+    # Operational Alert for Dispute/Escalation
+    from app.models import NotificationEventType
+    from app.services import emit_operational_alert
+    import time
+    # Use a time-based or history-based key to allow multiple legitimate dispute cycles
+    event_key = f"disputed:{complaint.id}:{int(time.time())}"
+    op_title = "Complaint escalated for review"
+    op_msg = f"Complaint {complaint.public_id} was {action_label.lower()} by the citizen and is now escalated."
+    
+    if complaint.officer_id:
+        await emit_operational_alert(session, complaint.officer_id, complaint.id, op_title, op_msg, NotificationEventType.DISPUTED.value, event_key)
+    else:
+        admins = (await session.scalars(select(User).where(User.role == UserRole.ADMINISTRATOR))).all()
+        for admin in admins:
+            await emit_operational_alert(session, admin.id, complaint.id, op_title, op_msg, NotificationEventType.DISPUTED.value, event_key)
+
     # Recalculate priority due to escalation
-    from app.priority import calculate_base_priority
+    from app.priority import get_effective_priority, calculate_base_priority
+    old_eff_pri, _, _ = get_effective_priority(complaint)
+
     related_count = 0
     if complaint.latitude is not None and complaint.longitude is not None:
         related = await find_related_complaints(session, complaint.latitude, complaint.longitude, complaint.category_id)
@@ -667,6 +745,10 @@ async def dispute_complaint(
     base_score, base_reasons = calculate_base_priority(complaint, related_count)
     complaint.base_priority_score = base_score
     complaint.base_priority_reasons = base_reasons
+
+    new_eff_pri, _, _ = get_effective_priority(complaint)
+    from app.services import check_and_emit_priority_alert
+    await check_and_emit_priority_alert(session, complaint, old_eff_pri, new_eff_pri)
 
     await session.commit()
     await session.refresh(complaint)

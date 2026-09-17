@@ -14,6 +14,7 @@ export function ComplaintsQueue() {
   const [departmentId, setDepartmentId] = useState('')
   const [authority, setAuthority] = useState('')
   const [status, setStatus] = useState('')
+  const [slaState, setSlaState] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   
   const [departments, setDepartments] = useState<any[]>([])
@@ -24,7 +25,7 @@ export function ComplaintsQueue() {
 
   useEffect(() => {
     load()
-  }, [token, departmentId, authority, status, sortBy])
+  }, [token, departmentId, authority, status, sortBy, slaState])
 
   async function load() {
     let url = '/officer/complaints?'
@@ -42,6 +43,12 @@ export function ComplaintsQueue() {
   }
 
   const isAdmin = user?.role === 'administrator'
+
+  const filteredComplaints = complaints.filter(c => {
+    if (slaState === 'breached') return c.is_sla_breached
+    if (slaState === 'approaching') return c.is_sla_approaching
+    return true
+  })
 
   return (
     <DashboardLayout>
@@ -86,6 +93,14 @@ export function ComplaintsQueue() {
               <option value="priority">Priority: High → Low</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">SLA Alert</label>
+            <select className="border border-slate-300 rounded-lg text-sm p-2 w-40" value={slaState} onChange={e => setSlaState(e.target.value)}>
+              <option value="">All</option>
+              <option value="breached">SLA Breached</option>
+              <option value="approaching">SLA Approaching</option>
+            </select>
+          </div>
           <button onClick={load} className="bg-slate-900 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-slate-800 transition-colors">
             Refresh
           </button>
@@ -106,21 +121,22 @@ export function ComplaintsQueue() {
                 <th className="p-4 font-bold text-slate-600">Zone</th>
                 <th className="p-4 font-bold text-slate-600">Severity</th>
                 <th className="p-4 font-bold text-slate-600">Priority</th>
+                <th className="p-4 font-bold text-slate-600">SLA Alert</th>
                 <th className="p-4 font-bold text-slate-600">Status</th>
                 <th className="p-4 font-bold text-slate-600">Assignment</th>
                 <th className="p-4 font-bold text-slate-600">Created At</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {complaints.length === 0 ? (
+              {filteredComplaints.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-slate-500">
+                  <td colSpan={12} className="p-8 text-center text-slate-500">
                     {isAdmin ? "No complaints found matching this filter." : "No complaints are currently assigned to you."}
                   </td>
                 </tr>
               ) : (
-                complaints.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                filteredComplaints.map(c => (
+                  <tr key={c.id} className={`transition-colors ${c.is_sla_breached ? 'bg-red-50/50 hover:bg-red-50' : c.is_sla_approaching ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50'}`}>
                     <td className="p-4 font-mono text-xs">
                       <Link to={`/admin/complaints/${c.id}`} className="text-indigo-600 hover:underline font-bold">
                         {c.public_id}
@@ -152,6 +168,15 @@ export function ComplaintsQueue() {
                           <span className="text-[10px] font-bold text-purple-600" title="Admin Override Active">★</span>
                         )}
                       </div>
+                    </td>
+                    <td className="p-4">
+                      {c.is_sla_breached ? (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800">OVERDUE</span>
+                      ) : c.is_sla_approaching ? (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800">DUE SOON</span>
+                      ) : (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-500">ON TRACK</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${

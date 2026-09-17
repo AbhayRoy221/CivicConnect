@@ -219,11 +219,12 @@ async def test_admin_override_api():
 
     finally:
         from sqlalchemy import delete
-        from app.models import AuditLog
+        from app.models import AuditLog, Notification
         async with TestingSessionLocal() as session:
             uids = [admin_id, officer_id, citizen_id]
             if created_complaint_id:
                 await session.execute(delete(AuditLog).where((AuditLog.actor_id.in_(uids)) | (AuditLog.entity_id == str(created_complaint_id))))
+                await session.execute(delete(Notification).where(Notification.complaint_id == created_complaint_id))
             else:
                 await session.execute(delete(AuditLog).where(AuditLog.actor_id.in_(uids)))
             
