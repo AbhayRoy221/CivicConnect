@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import router
+from app.api_advisories import router as advisories_router
+from app.api_advisories import complaints_advisories_router
 from app.core.config import get_settings
 from app.database import database_is_available, engine
 
@@ -28,6 +30,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(advisories_router)
+app.include_router(complaints_advisories_router)
 app.include_router(router)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 

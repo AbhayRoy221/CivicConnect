@@ -271,6 +271,10 @@ export function Report() {
     }
   }
 
+  const [checkingAdvisories, setCheckingAdvisories] = useState(false)
+  const [activeAdvisories, setActiveAdvisories] = useState<any[]>([])
+  const [showAdvisoryModal, setShowAdvisoryModal] = useState(false)
+
   async function goToReview() {
     if (!pos) {
       alert("Please select a location on the map.")
@@ -290,21 +294,41 @@ export function Report() {
       return
     }
 
+    if (analysis?.category_name && pos) {
+      setCheckingAdvisories(true)
+      try {
+        const res = await api<any>(`/complaints/check-advisories?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
+        if (res.has_advisory && res.advisories.length > 0) {
+          setActiveAdvisories(res.advisories)
+          setShowAdvisoryModal(true)
+          setCheckingAdvisories(false)
+          return // Stop and show modal
+        }
+      } catch (err) {
+        console.warn("Failed to check advisories", err)
+      } finally {
+        setCheckingAdvisories(false)
+      }
+    }
+
+    proceedToReviewStep()
+  }
+
+  function proceedToReviewStep() {
+    setShowAdvisoryModal(false)
     setStep(3)
 
     // Check for related reports
     if (analysis?.category_name && pos) {
       setCheckingRelated(true)
       setRelatedError('')
-      try {
-        const res = await api<any[]>(`/complaints/check-related?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
-        setRelatedReports(res)
-      } catch (err: any) {
-        console.warn("Failed to check related reports", err)
-        setRelatedError("Could not verify related reports")
-      } finally {
-        setCheckingRelated(false)
-      }
+      api<any[]>(`/complaints/check-related?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
+        .then(res => setRelatedReports(res))
+        .catch(err => {
+          console.warn("Failed to check related reports", err)
+          setRelatedError("Could not verify related reports")
+        })
+        .finally(() => setCheckingRelated(false))
     }
   }
 
@@ -698,12 +722,48 @@ export function Report() {
               <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors">Back</button>
               <button
                 onClick={goToReview}
-                disabled={!pos || !desc.trim()}
+                disabled={!pos || !desc.trim() || checkingAdvisories}
                 className="flex-1 bg-slate-900 text-white font-bold p-4 rounded-xl shadow hover:bg-slate-800 disabled:opacity-50 transition-colors"
               >
-                Review Report →
+                {checkingAdvisories ? 'Checking Advisories...' : 'Review Report →'}
               </button>
             </div>
+
+            {showAdvisoryModal && (
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center gap-3 text-amber-600 mb-4">
+                    <span className="text-3xl">⚠️</span>
+                    <h3 className="text-xl font-bold text-slate-900">Active Advisory Found</h3>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">
+                    The municipality is already aware of issues matching your description in this area. Your report may be a duplicate of these known issues:
+                  </p>
+                  <div className="bg-amber-50 rounded-xl p-4 mb-6 space-y-3 max-h-48 overflow-y-auto border border-amber-100">
+                    {activeAdvisories.map(adv => (
+                      <div key={adv.id} className="border-b border-amber-200/50 pb-2 last:border-0 last:pb-0">
+                        <div className="font-bold text-amber-900 text-sm">{adv.title}</div>
+                        <div className="text-xs text-amber-700">{adv.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowAdvisoryModal(false)}
+                      className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel Report
+                    </button>
+                    <button
+                      onClick={proceedToReviewStep}
+                      className="flex-1 px-4 py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 shadow-sm transition-colors"
+                    >
+                      Report Anyway
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

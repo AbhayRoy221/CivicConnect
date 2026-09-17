@@ -59,6 +59,7 @@ from app.schemas import (
     UserRewardsSummary,
     UserRoleUpdateRequest,
     WardSummaryResponse,
+    PuneWardResponse,
 )
 from app.security import create_access_token, hash_password, verify_password
 from app.services import (
@@ -270,8 +271,14 @@ async def categories(session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/departments", response_model=list[DepartmentResponse])
-async def departments(session: AsyncSession = Depends(get_session)):
-    return (await session.scalars(select(Department).where(Department.active.is_(True)).order_by(Department.name))).all()
+async def get_departments(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(Department).order_by(Department.name))
+    return result.scalars().all()
+
+@router.get("/pune-wards", response_model=list[PuneWardResponse])
+async def get_pune_wards(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(PuneWard).order_by(PuneWard.ward_number))
+    return result.scalars().all()
 
 
 @router.post("/complaints/analyze", response_model=AIAnalysisResponse)

@@ -4,13 +4,14 @@ from unittest.mock import patch
 from urllib.error import URLError
 import socket
 from sqlalchemy import select, func
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.models import PuneWard, AdministrativeWardOffice
 from app.seed import seed_administrative_wards
 from app.services import get_ward_from_coordinates
 
 @pytest.mark.anyio
 async def test_pmc_geoserver_timeout_preserves_snapshot():
+    await engine.dispose()
     async with AsyncSessionLocal() as session:
         # 1. Count before timeout
         pune_wards_before = await session.scalar(select(func.count()).select_from(PuneWard))

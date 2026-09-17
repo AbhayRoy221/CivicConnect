@@ -242,3 +242,24 @@ class AuditLog(Base):
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class CivicAdvisoryStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+class CivicAdvisory(Base):
+    __tablename__ = "civic_advisories"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    public_id: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), index=True)
+    ward_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pune_wards.id"), index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    status: Mapped[CivicAdvisoryStatus] = mapped_column(Enum(CivicAdvisoryStatus, name="civic_advisory_status"), default=CivicAdvisoryStatus.ACTIVE, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

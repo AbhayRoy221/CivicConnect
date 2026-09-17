@@ -4,11 +4,13 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import CivicAlerts from '../components/CivicAlerts'
 
 export function Home() {
   const { user } = useAuth()
   return (
     <div className="px-4 py-8 max-w-md mx-auto space-y-8">
+      <CivicAlerts />
       <div className="text-center space-y-4">
         <div className="w-20 h-20 bg-emerald-100 rounded-full mx-auto flex items-center justify-center text-4xl shadow-sm">📸</div>
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Report Civic Issues</h1>

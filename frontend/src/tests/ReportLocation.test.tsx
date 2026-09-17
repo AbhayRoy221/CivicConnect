@@ -14,9 +14,9 @@ vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: any) => <div data-testid="map-container">{children}</div>,
   TileLayer: () => <div />,
   Marker: ({ position, eventHandlers }: any) => (
-    <div 
-      data-testid="map-marker" 
-      data-pos={JSON.stringify(position)} 
+    <div
+      data-testid="map-marker"
+      data-pos={JSON.stringify(position)}
       onClick={() => {
         if (eventHandlers && eventHandlers.dragend) {
           eventHandlers.dragend({
@@ -65,12 +65,35 @@ const renderWithContext = () => render(
 describe('Report Location & UX Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes('/check-advisories')) return Promise.resolve({ has_advisory: false, advisories: [] });
+      if (url.includes('/check-related')) return Promise.resolve([]);
+      if (url.includes('/routing-preview')) {
+        return Promise.resolve({
+          authority: null,
+          department_name: null,
+          geographic_ward_number: null,
+          administrative_ward_name: null,
+          administrative_zone: null,
+          assignment_status: 'Not handled by PMC'
+        });
+      }
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ category_name: 'Pothole', confidence: 0.95, rationale: 'x', provider: 'fallback', model: 'local' });
+      }
+      if (url.includes('/complaints') && !url.includes('check')) {
+        return Promise.resolve({ id: '123' }); // submit
+      }
+      return Promise.resolve({});
+    });
+
     globalAny.URL.createObjectURL = vi.fn(() => 'mock-url')
     globalAny.URL.revokeObjectURL = vi.fn()
-    
+
     // Mock fetch for nominatim
     globalAny.fetch = vi.fn() as any
-    
+
     // Default GPS mock
     const mockGeolocation = {
       getCurrentPosition: vi.fn(),
@@ -84,28 +107,28 @@ describe('Report Location & UX Flow', () => {
   })
 
   it('1. GPS success updates coordinates and source', async () => {
-    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) => 
+    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) =>
       success({ coords: { latitude: 18.5204, longitude: 73.8567, accuracy: 10 } })
     )
-    
+
     ;(globalAny.fetch as any).mockResolvedValueOnce({
       json: async () => ({ display_name: "Pune City, Maharashtra" })
     })
 
     renderWithContext()
-    
+
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     const file = new File(['dummy'], 'test.png', { type: 'image/png' })
     fireEvent.change(fileInput, { target: { files: [file] } })
-    
+
     mockApi.mockResolvedValueOnce({ category_name: 'Pothole', confidence: 0.95, rationale: 'x', provider: 'fallback', model: 'local' })
-    
+
     fireEvent.click(screen.getByText(/Analyze Image/i))
     await waitFor(() => expect(screen.getByText(/Analysis Complete/i)).toBeInTheDocument())
     fireEvent.click(screen.getByText(/Continue to Location/i))
 
     act(() => { fireEvent.click(screen.getByText(/Use My Current Location/i)) })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Device GPS')).toBeInTheDocument()
       expect(screen.getByText('18.52040, 73.85670')).toBeInTheDocument()
@@ -115,7 +138,7 @@ describe('Report Location & UX Flow', () => {
   })
 
   it('2. GPS warning accuracy still sets coords', async () => {
-    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) => 
+    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) =>
       success({ coords: { latitude: 18.5204, longitude: 73.8567, accuracy: 250 } })
     )
     ;(globalAny.fetch as any).mockResolvedValueOnce({ json: async () => ({ display_name: "Pune" }) })
@@ -133,7 +156,7 @@ describe('Report Location & UX Flow', () => {
   })
 
   it('3. GPS poor accuracy shows error and blocks submission', async () => {
-    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) => 
+    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) =>
       success({ coords: { latitude: 19.0176, longitude: 72.8649, accuracy: 5000 } })
     )
     ;(globalAny.fetch as any).mockResolvedValueOnce({ json: async () => ({ display_name: "Titwala" }) })
@@ -150,14 +173,14 @@ describe('Report Location & UX Flow', () => {
       expect(screen.getByText(/Location accuracy is too low/i)).toBeInTheDocument()
       expect(screen.getByText(/Try Again/i)).toBeInTheDocument()
     })
-    
+
     // Attempting to submit should block
     const descInput = screen.getByPlaceholderText(/Add any helpful details/i)
     act(() => { fireEvent.change(descInput, { target: { value: 'Bad road' } }) })
-    
+
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
     act(() => { fireEvent.click(screen.getByText(/Review Report/i)) })
-    
+
     expect(alertMock).toHaveBeenCalledWith("Location accuracy is too low. Please use Search or map pin to verify.")
     alertMock.mockRestore()
   })
@@ -183,17 +206,17 @@ describe('Report Location & UX Flow', () => {
     })
 
     // GPS gives Titwala
-    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) => 
+    ;(globalAny.navigator.geolocation.getCurrentPosition as any).mockImplementationOnce((success: any) =>
       success({ coords: { latitude: 19.2965, longitude: 73.2750, accuracy: 50 } })
     )
-    
+
     act(() => { fireEvent.click(screen.getByText(/Use My Current Location/i)) })
     await waitFor(() => expect(screen.getByText('19.29650, 73.27500')).toBeInTheDocument())
 
     // Search Pune
     const searchInput = screen.getByPlaceholderText(/Enter area/i)
     act(() => { fireEvent.change(searchInput, { target: { value: 'Pune' } }) })
-    
+
     // Wait for debounce and autocomplete to show
     await waitFor(() => {
       expect(screen.getByText('Pune City')).toBeInTheDocument()
@@ -201,11 +224,11 @@ describe('Report Location & UX Flow', () => {
 
     // Click result
     act(() => { fireEvent.click(screen.getByText('Pune City')) })
-    
+
     await waitFor(() => {
       expect(screen.getAllByText('Search').length).toBeGreaterThan(0)
       expect(screen.getByText('18.52040, 73.85670')).toBeInTheDocument()
-      expect(screen.queryByText('±50 m')).not.toBeInTheDocument() 
+      expect(screen.queryByText('±50 m')).not.toBeInTheDocument()
     })
   })
 
@@ -232,14 +255,14 @@ describe('Report Location & UX Flow', () => {
       expect(screen.getByText('Manual Map Pin')).toBeInTheDocument()
       expect(screen.getByText('18.56000, 73.80000')).toBeInTheDocument()
     })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Aundh, Pune')).toBeInTheDocument()
     }, { timeout: 1000 })
-    
+
     // Simulate dragend via simulated click on marker which triggers the mock dragend
     act(() => { fireEvent.click(screen.getByTestId('map-marker')) })
-    
+
     await waitFor(() => {
       expect(screen.getByText('18.57000, 73.81000')).toBeInTheDocument()
     })
@@ -249,15 +272,15 @@ describe('Report Location & UX Flow', () => {
     renderWithContext()
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     fireEvent.change(fileInput, { target: { files: [new File([''], 'a.jpg')] } })
-    
-    mockApi.mockResolvedValueOnce({ 
-      category_name: 'Pothole', 
-      confidence: 0.95, 
-      rationale: 'Looks like a pothole', 
-      provider: 'gemini', 
-      model: 'gemini-3.6-flash' 
+
+    mockApi.mockResolvedValueOnce({
+      category_name: 'Pothole',
+      confidence: 0.95,
+      rationale: 'Looks like a pothole',
+      provider: 'gemini',
+      model: 'gemini-3.6-flash'
     })
-    
+
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
     await waitFor(() => {
       expect(screen.getAllByText(/Gemini/i).length).toBeGreaterThan(0)
@@ -270,15 +293,15 @@ describe('Report Location & UX Flow', () => {
     renderWithContext()
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     fireEvent.change(fileInput, { target: { files: [new File([''], 'a.jpg')] } })
-    
-    mockApi.mockResolvedValueOnce({ 
-      category_name: 'Garbage', 
-      confidence: 0.88, 
-      rationale: 'fallback model result', 
-      provider: 'fallback', 
-      model: 'resnet50' 
+
+    mockApi.mockResolvedValueOnce({
+      category_name: 'Garbage',
+      confidence: 0.88,
+      rationale: 'fallback model result',
+      provider: 'fallback',
+      model: 'resnet50'
     })
-    
+
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
     await waitFor(() => {
       expect(screen.getByText(/Cloud classification unavailable/i)).toBeInTheDocument()
@@ -297,7 +320,7 @@ describe('Report Location & UX Flow', () => {
     act(() => { fireEvent.click(screen.getByText(/Continue to Location/i)) })
 
     ;(globalAny.fetch as any).mockResolvedValueOnce({ json: async () => ({ display_name: "Titwala" }) })
-    
+
     mockApi.mockResolvedValueOnce({
       authority: null,
       department_name: null,
@@ -311,16 +334,16 @@ describe('Report Location & UX Flow', () => {
 
     const descInput = screen.getByPlaceholderText(/Add any helpful details/i)
     act(() => { fireEvent.change(descInput, { target: { value: 'Bad road' } }) })
-    
+
     act(() => { fireEvent.click(screen.getByText(/Review Report/i)) })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Outside PMC')).toBeInTheDocument()
       expect(screen.getByText('Not handled by PMC')).toBeInTheDocument()
     })
 
     act(() => { fireEvent.click(screen.getByText('Back')) })
-    
+
     mockApi.mockResolvedValueOnce({
       authority: 'PMC',
       department_name: 'Road Department',
@@ -334,7 +357,7 @@ describe('Report Location & UX Flow', () => {
     ;(window as any).simulateMapClick(18.5204, 73.8567)
 
     act(() => { fireEvent.click(screen.getByText(/Review Report/i)) })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Pune Municipal Corporation')).toBeInTheDocument()
       expect(screen.getByText('Road Department')).toBeInTheDocument()

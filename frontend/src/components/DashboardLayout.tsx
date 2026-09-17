@@ -15,6 +15,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     { label: 'Operations Map', path: '/admin/map', roles: ['administrator'] },
     { label: 'Users', path: '/admin/users', roles: ['administrator'] },
     { label: 'Audit Logs', path: '/admin/audit', roles: ['administrator'] },
+    { label: 'Advisories', path: '/admin/advisories', roles: ['administrator', 'municipal_officer'] },
   ]
   
   const isOfficer = user?.role === 'municipal_officer'

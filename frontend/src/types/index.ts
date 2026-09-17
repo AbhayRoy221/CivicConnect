@@ -8,6 +8,7 @@ export type User = {
   role: 'citizen' | 'municipal_officer' | 'administrator'
   department_id?: string
   department_name?: string
+  ward_id?: string
   ward_name?: string
   phone?: string
   language: string

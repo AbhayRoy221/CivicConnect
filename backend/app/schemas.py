@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Annotated
+import uuid
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, BeforeValidator
@@ -129,7 +130,7 @@ class ComplaintResponse(BaseModel):
     updated_at: datetime
     resolved_at: datetime | None
     resolution_evidence: ResolutionEvidenceResponse | None = None
-    
+
     # Priority Engine
     priority_score: int = 0
     priority_reasons: list | dict | None = None
@@ -225,6 +226,11 @@ class WardSummaryResponse(BaseModel):
     resolved_complaints: int
     in_progress_complaints: int
     overdue_complaints: int
+
+class PuneWardResponse(BaseModel):
+    id: uuid.UUID
+    ward_number: int
+    ward_name: str | None = None
 
 
 class AIAnalysisResponse(BaseModel):
@@ -338,3 +344,37 @@ class RoutingPreviewResponse(BaseModel):
     administrative_zone: str | None = None
     assignment_status: str
 
+from .models import CivicAdvisoryStatus
+
+class CivicAdvisoryBase(BaseModel):
+    title: str = Field(..., max_length=200)
+    description: str
+    category_id: UUID | None = None
+    ward_id: UUID | None = None
+    starts_at: datetime
+    expires_at: datetime
+
+class CivicAdvisoryCreate(CivicAdvisoryBase):
+    pass
+
+class CivicAdvisoryUpdate(BaseModel):
+    title: str | None = Field(None, max_length=200)
+    description: str | None = None
+    category_id: UUID | None = None
+    ward_id: UUID | None = None
+    starts_at: datetime | None = None
+    expires_at: datetime | None = None
+    status: CivicAdvisoryStatus | None = None
+
+class CivicAdvisoryResponse(CivicAdvisoryBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    public_id: str
+    created_by: UUID
+    status: CivicAdvisoryStatus
+    created_at: datetime
+    updated_at: datetime
+
+class CheckAdvisoryResponse(BaseModel):
+    has_advisory: bool
+    advisories: list[CivicAdvisoryResponse] = []

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, Gate } from './context/AuthContext'
@@ -18,6 +17,8 @@ import { AnalyticsDashboard } from './pages/AnalyticsDashboard'
 import { Leaderboard } from './pages/Leaderboard'
 import { Confirmation } from './pages/Confirmation'
 import { Notifications } from './pages/Notifications'
+import AdminAdvisories from './pages/AdminAdvisories'
+import { CivicAlertsPage } from './pages/CivicAlertsPage'
 
 function AppContent() {
   const location = useLocation()
@@ -32,6 +33,7 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Login register />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/civic-alerts" element={<CivicAlertsPage />} />
           <Route path="/report" element={<Gate role="citizen"><Report /></Gate>} />
           <Route path="/my-reports" element={<Gate role="citizen"><MyReports /></Gate>} />
           <Route path="/complaints/:id" element={<Gate role="citizen"><Detail /></Gate>} />
@@ -46,6 +48,7 @@ function AppContent() {
           <Route path="/admin/users" element={<Gate role="administrator"><Users /></Gate>} />
           <Route path="/admin/audit" element={<Gate role="administrator"><AuditLogs /></Gate>} />
           <Route path="/admin/map" element={<Gate role="administrator"><OperationsMap /></Gate>} />
+          <Route path="/admin/advisories" element={<Gate roles={['administrator', 'municipal_officer']}><AdminAdvisories /></Gate>} />
         </Routes>
       </div>
     </div>
