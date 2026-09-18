@@ -124,8 +124,8 @@ describe('Report Location & UX Flow', () => {
     mockApi.mockResolvedValueOnce({ category_name: 'Pothole', confidence: 0.95, rationale: 'x', provider: 'fallback', model: 'local' })
 
     fireEvent.click(screen.getByText(/Analyze Image/i))
-    await waitFor(() => expect(screen.getByText(/Analysis Complete/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByText(/Continue to Location/i))
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    fireEvent.click(screen.getByText(/Confirm & Continue/i))
 
     act(() => { fireEvent.click(screen.getByText(/Use My Current Location/i)) })
 
@@ -146,8 +146,8 @@ describe('Report Location & UX Flow', () => {
     fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([''], 'a.jpg')] } })
     mockApi.mockResolvedValueOnce({ category_name: 'Pothole', confidence: 0.95, rationale: 'x', provider: 'fallback', model: 'local' })
     fireEvent.click(screen.getByText(/Analyze Image/i))
-    await waitFor(() => screen.getByText(/Continue to Location/i))
-    fireEvent.click(screen.getByText(/Continue to Location/i))
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    fireEvent.click(screen.getByText(/Confirm & Continue/i))
 
     act(() => { fireEvent.click(screen.getByText(/Use My Current Location/i)) })
     await waitFor(() => {
@@ -164,8 +164,8 @@ describe('Report Location & UX Flow', () => {
     fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([''], 'a.jpg')] } })
     mockApi.mockResolvedValueOnce({ category_name: 'Pothole', confidence: 0.95, rationale: 'x', provider: 'fallback', model: 'local' })
     fireEvent.click(screen.getByText(/Analyze Image/i))
-    await waitFor(() => screen.getByText(/Continue to Location/i))
-    fireEvent.click(screen.getByText(/Continue to Location/i))
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    fireEvent.click(screen.getByText(/Confirm & Continue/i))
 
     act(() => { fireEvent.click(screen.getByText(/Use My Current Location/i)) })
     await waitFor(() => {
@@ -191,8 +191,8 @@ describe('Report Location & UX Flow', () => {
     fireEvent.change(fileInput, { target: { files: [new File([''], 'a.jpg')] } })
     mockApi.mockResolvedValueOnce({ category_name: 'Garbage', confidence: 0.9, rationale: 'x', provider: 'fallback', model: 'local' })
     fireEvent.click(screen.getByText(/Analyze Image/i))
-    await waitFor(() => screen.getByText(/Continue to Location/i))
-    fireEvent.click(screen.getByText(/Continue to Location/i))
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    fireEvent.click(screen.getByText(/Confirm & Continue/i))
 
     // Mock fetch robustly based on URL
     ;(globalAny.fetch as any).mockImplementation((url: string) => {
@@ -238,8 +238,8 @@ describe('Report Location & UX Flow', () => {
     fireEvent.change(fileInput, { target: { files: [new File([''], 'a.jpg')] } })
     mockApi.mockResolvedValueOnce({ category_name: 'Garbage', confidence: 0.9, rationale: 'x', provider: 'fallback', model: 'local' })
     fireEvent.click(screen.getByText(/Analyze Image/i))
-    await waitFor(() => screen.getByText(/Continue to Location/i))
-    fireEvent.click(screen.getByText(/Continue to Location/i))
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    fireEvent.click(screen.getByText(/Confirm & Continue/i))
 
     ;(globalAny.fetch as any).mockImplementation((url: string) => {
       if (url.includes('reverse')) {
@@ -283,8 +283,6 @@ describe('Report Location & UX Flow', () => {
 
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
     await waitFor(() => {
-      expect(screen.getAllByText(/Gemini/i).length).toBeGreaterThan(0)
-      expect(screen.getByText(/gemini-3.6-flash/i)).toBeInTheDocument()
       expect(screen.queryByText(/fallback/i)).not.toBeInTheDocument()
     })
   })
@@ -304,9 +302,8 @@ describe('Report Location & UX Flow', () => {
 
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
     await waitFor(() => {
-      expect(screen.getByText(/Cloud classification unavailable/i)).toBeInTheDocument()
+      expect(screen.getByText(/Local Fallback/i)).toBeInTheDocument()
       expect(screen.getAllByText(/Local Fallback/i).length).toBeGreaterThan(0)
-      expect(screen.getAllByText(/resnet50/i).length).toBeGreaterThan(0)
     })
   })
 
@@ -316,8 +313,8 @@ describe('Report Location & UX Flow', () => {
     fireEvent.change(fileInput, { target: { files: [new File([''], 'a.jpg')] } })
     mockApi.mockResolvedValueOnce({ category_name: 'Pothole', confidence: 0.9, rationale: 'x', provider: 'fallback', model: 'local' })
     act(() => { fireEvent.click(screen.getByText(/Analyze Image/i)) })
-    await waitFor(() => screen.getByText(/Continue to Location/i))
-    act(() => { fireEvent.click(screen.getByText(/Continue to Location/i)) })
+    await waitFor(() => screen.getByText(/Confirm & Continue/i))
+    act(() => { fireEvent.click(screen.getByText(/Confirm & Continue/i)) })
 
     ;(globalAny.fetch as any).mockResolvedValueOnce({ json: async () => ({ display_name: "Titwala" }) })
 

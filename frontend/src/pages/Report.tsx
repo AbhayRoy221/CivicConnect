@@ -6,6 +6,17 @@ import { api } from '../services/api'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import type { AIAnalysisResponse, RoutingPreview } from '../types'
+import AdvisoryModal from '../components/AdvisoryModal'
+
+const VALID_CATEGORIES = [
+  "Pothole / Road Damage",
+  "Garbage Overflow",
+  "Water Leakage",
+  "Streetlight Issue",
+  "Waterlogging",
+  "Illegal Parking",
+  "Other Civic Issue"
+];
 
 import L from 'leaflet'
 import icon from 'leaflet/dist/images/marker-icon.png'
@@ -84,6 +95,9 @@ export function Report() {
   const [analysisError, setAnalysisError] = useState('')
   const [analysis, setAnalysis] = useState<AIAnalysisResponse | null>(null)
 
+  const [confirmedCategory, setConfirmedCategory] = useState<string | null>(null)
+  const [showManualCategory, setShowManualCategory] = useState(false)
+
   // Step 2: Location
   const [pos, setPos] = useState<[number, number] | null>(null)
   const [address, setAddress] = useState<string | null>(null)
@@ -121,6 +135,8 @@ export function Report() {
     setPreview('')
     setAnalyzeState('IDLE')
     setAnalysis(null)
+    setConfirmedCategory(null)
+    setShowManualCategory(false)
   }, [file])
 
   // Reverse geocode when map pin moves (or GPS fires). We skip if it's from Search to save API call.
@@ -148,10 +164,10 @@ export function Report() {
 
   // Fetch routing preview whenever location changes (if category is known)
   useEffect(() => {
-    if (pos && analysis?.category_name) {
+    if (pos && confirmedCategory) {
       fetchRoutingPreview()
     }
-  }, [pos, analysis?.category_name])
+  }, [pos, confirmedCategory])
 
   // Search Autocomplete Debounce
   useEffect(() => {
@@ -234,25 +250,92 @@ export function Report() {
   }
 
   async function analyzeImage() {
-    if (!file) return
-    const fd = new FormData()
-    fd.append('file', file)
+    if (!file || analyzeState === 'LOADING') return
 
     setAnalyzeState('LOADING')
     setAnalysisError('')
 
     try {
+      // 1. Client-side compression for classification request (preserves original 'file' state)
+      const compressedBlob = await compressImage(file)
+      const fd = new FormData()
+      fd.append('file', compressedBlob, file.name || 'image.jpg')
+
+      // 2. Upload and analyze
       const res = await api<AIAnalysisResponse>('/complaints/analyze', token, { method: 'POST', body: fd })
       setAnalysis(res)
       setAnalyzeState('SUCCESS')
+      const uncertain = res.category_name.includes('Uncertain') || res.confidence < 0.6
+      if (uncertain) {
+        setShowManualCategory(true)
+      }
     } catch (e: Error | any) {
       setAnalyzeState('ERROR')
       setAnalysisError(e.message || 'Analysis failed due to a server error.')
+      setShowManualCategory(true)
     }
   }
 
+  // Helper for fast client-side resizing
+  async function compressImage(file: File): Promise<Blob> {
+    // Skip compression during vitest execution since JSDOM doesn't support canvas fully
+    if (import.meta.env.MODE === 'test') {
+      return file;
+    }
+
+    return new Promise((resolve) => {
+      // Safety fallback for edge cases where canvas or Image doesn't load
+      const fallbackTimer = setTimeout(() => resolve(file), 1000);
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = event => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const maxDim = 800;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = (h * maxDim) / w;
+              w = maxDim;
+            } else {
+              w = (w * maxDim) / h;
+              h = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+             clearTimeout(fallbackTimer);
+             return resolve(file);
+          }
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            clearTimeout(fallbackTimer);
+            if (blob) resolve(blob);
+            else resolve(file);
+          }, 'image/jpeg', 0.7);
+        };
+        img.onerror = () => {
+          clearTimeout(fallbackTimer);
+          resolve(file);
+        };
+      };
+      reader.onerror = () => {
+        clearTimeout(fallbackTimer);
+        resolve(file);
+      };
+    });
+  }
+
   async function fetchRoutingPreview() {
-    if (!pos || !analysis?.category_name) return
+    if (!pos || !confirmedCategory) return
     setLoadingPreview(true)
     try {
       const res = await api<RoutingPreview>('/complaints/routing-preview', token, {
@@ -260,7 +343,7 @@ export function Report() {
         body: JSON.stringify({
           latitude: pos[0],
           longitude: pos[1],
-          category_name: analysis.category_name
+          category_name: confirmedCategory
         }),
       })
       setRoutingPreview(res)
@@ -294,10 +377,10 @@ export function Report() {
       return
     }
 
-    if (analysis?.category_name && pos) {
+    if (confirmedCategory && pos) {
       setCheckingAdvisories(true)
       try {
-        const res = await api<any>(`/complaints/check-advisories?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
+        const res = await api<any>(`/complaints/check-advisories?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(confirmedCategory)}`, token)
         if (res.has_advisory && res.advisories.length > 0) {
           setActiveAdvisories(res.advisories)
           setShowAdvisoryModal(true)
@@ -319,10 +402,10 @@ export function Report() {
     setStep(3)
 
     // Check for related reports
-    if (analysis?.category_name && pos) {
+    if (confirmedCategory && pos) {
       setCheckingRelated(true)
       setRelatedError('')
-      api<any[]>(`/complaints/check-related?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(analysis.category_name)}`, token)
+      api<any[]>(`/complaints/check-related?latitude=${pos[0]}&longitude=${pos[1]}&category_name=${encodeURIComponent(confirmedCategory)}`, token)
         .then(res => setRelatedReports(res))
         .catch(err => {
           console.warn("Failed to check related reports", err)
@@ -333,7 +416,7 @@ export function Report() {
   }
 
   async function submitComplaint() {
-    if (!file || !pos || !analysis?.category_name || submitting) return
+    if (!file || !pos || !confirmedCategory || submitting) return
     if (accuracyQuality === 'POOR' && locationSource === 'Device GPS') return
     setSubmitting(true)
     let success = false
@@ -344,7 +427,7 @@ export function Report() {
       fd.append('latitude', pos[0].toString())
       fd.append('longitude', pos[1].toString())
       if (address) fd.append('address', address)
-      fd.append('category_name', analysis.category_name)
+      fd.append('category_name', confirmedCategory)
       fd.append('severity', severity)
 
       const res = await api<any>('/complaints', token, { method: 'POST', body: fd })
@@ -390,7 +473,7 @@ export function Report() {
           </div>
           <div className="flex justify-between items-center mb-4">
             <span className="text-sm text-slate-500">Issue</span>
-            <span className="font-semibold text-slate-900">{analysis?.category_name}</span>
+            <span className="font-semibold text-slate-900">{confirmedCategory}</span>
           </div>
 
           <div className="border-t border-slate-200 pt-4 mt-2">
@@ -473,79 +556,91 @@ export function Report() {
 
             {file && (
               <div className="space-y-4">
-                <button
-                  onClick={analyzeImage}
-                  disabled={analyzeState === 'LOADING' || analyzeState === 'SUCCESS'}
-                  className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
-                    analyzeState === 'SUCCESS' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
-                    analyzeState === 'LOADING' ? 'bg-indigo-100 text-indigo-700 cursor-wait' :
-                    'bg-indigo-600 text-white shadow-md hover:bg-indigo-700'
-                  }`}
-                >
-                  {analyzeState === 'IDLE' && <><span>✨</span> Analyze Image</>}
-                  {analyzeState === 'LOADING' && <>
-                    <svg className="animate-spin h-5 w-5 text-indigo-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Analyzing...
-                  </>}
-                  {analyzeState === 'SUCCESS' && <><span>✅</span> Analysis Complete</>}
-                  {analyzeState === 'ERROR' && <><span>❌</span> Analysis Failed (Try Again)</>}
-                </button>
+                {analyzeState === 'IDLE' || analyzeState === 'LOADING' ? (
+                  <button
+                    onClick={analyzeImage}
+                    disabled={analyzeState === 'LOADING'}
+                    className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all ${
+                      analyzeState === 'LOADING' ? 'bg-indigo-100 text-indigo-700 cursor-wait' :
+                      'bg-indigo-600 text-white shadow-md hover:bg-indigo-700'
+                    }`}
+                  >
+                    {analyzeState === 'IDLE' && <><span>✨</span> Analyze Image</>}
+                    {analyzeState === 'LOADING' && <>
+                      <svg className="animate-spin h-5 w-5 text-indigo-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <div className="flex flex-col items-start text-left ml-1">
+                        <span className="leading-tight">Analyzing your photo...</span>
+                        <span className="text-xs font-normal opacity-70 leading-tight">Identifying the civic issue</span>
+                      </div>
+                    </>}
+                  </button>
+                ) : null}
 
-                {analyzeState === 'ERROR' && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm flex items-start gap-2">
-                    <span className="text-base">⚠️</span>
-                    <span><strong>Error:</strong> {analysisError}</span>
-                  </div>
-                )}
-
-                {analysis && (
+                {analyzeState === 'SUCCESS' && !showManualCategory && analysis && (
                   <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in zoom-in-95">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Detected Issue</div>
-                        <div className="text-lg font-bold text-slate-900">{analysis.category_name}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Confidence</div>
-                        <div className="text-lg font-bold text-indigo-600">{(analysis.confidence * 100).toFixed(0)}%</div>
-                      </div>
+                    <div className="flex items-center gap-2 mb-2 text-indigo-600 font-bold text-sm">
+                      <span>✨</span>
+                      <span>AI detected:</span>
+                      {analysis.provider === 'fallback' && <span className="ml-auto text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">Local Fallback</span>}
                     </div>
 
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Evidence</div>
-                      <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{analysis.rationale}</p>
+                    <div className="text-xl font-extrabold text-slate-900">{analysis.category_name}</div>
+
+                    <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                      <span className="font-semibold text-slate-900 block mb-1">Why:</span>
+                      {analysis.rationale.replace(/\[.*?\]\s*/, '')}
                     </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          <span className="font-semibold text-slate-700">Provider:</span> {analysis.provider === 'gemini' ? 'Gemini' : analysis.provider === 'local' ? 'Local Fallback' : analysis.provider}
-                        </span>
-                        <span>
-                          <span className="font-semibold text-slate-700">Model:</span> {analysis.model}
-                        </span>
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <div className="text-sm font-semibold text-slate-700 mb-3 text-center">Is this correct?</div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            setConfirmedCategory(analysis.category_name)
+                            setStep(2)
+                          }}
+                          className="flex-1 bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-sm hover:bg-emerald-700 transition-colors"
+                        >
+                          Confirm & Continue
+                        </button>
+                        <button
+                          onClick={() => setShowManualCategory(true)}
+                          className="flex-1 bg-white border border-slate-300 text-slate-700 font-bold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                          Change Category
+                        </button>
                       </div>
                     </div>
-
-                    {analysis.provider === 'fallback' && (
-                      <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
-                        <span className="text-base mt-0.5">⚠️</span>
-                        <span>Cloud classification unavailable — local fallback used.</span>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={analyzeState !== 'SUCCESS'}
-                  className="w-full bg-slate-900 text-white font-bold p-4 rounded-xl shadow hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                >
-                  Continue to Location →
-                </button>
+                {showManualCategory && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in zoom-in-95">
+                    <div className="text-sm font-semibold text-slate-700 text-center mb-4">
+                      {analyzeState === 'ERROR' || (analysis && (analysis.category_name.includes('Uncertain') || analysis.confidence < 0.6))
+                        ? "We couldn't confidently identify the issue. Please choose the category."
+                        : "Select the correct category:"}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {VALID_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setConfirmedCategory(cat)
+                            setStep(2)
+                          }}
+                          className="text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 font-medium text-slate-800 transition-colors"
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -777,21 +872,23 @@ export function Report() {
 
               <div className="p-4 border-b border-slate-100">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">ISSUE</div>
-                <div className="text-lg font-bold text-slate-900 mb-2">{analysis?.category_name}</div>
-                <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Confidence</span>
-                    <span>{(analysis!.confidence * 100).toFixed(0)}%</span>
+                <div className="text-lg font-bold text-slate-900 mb-2">{confirmedCategory}</div>
+                {analysis && confirmedCategory === analysis.category_name && (
+                  <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Confidence</span>
+                      <span>{(analysis.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Provider</span>
+                      <span>{analysis.provider === 'gemini' ? 'Gemini' : analysis.provider === 'local' ? 'Local Fallback' : analysis.provider}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Model</span>
+                      <span className="font-mono text-xs">{analysis.model || 'N/A'}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Provider</span>
-                    <span>{analysis ? (analysis.provider === 'gemini' ? 'Gemini' : analysis.provider === 'local' ? 'Local Fallback' : analysis.provider) : 'Not reported'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Model</span>
-                    <span className="font-mono text-xs">{analysis?.model || 'N/A'}</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="p-4 border-b border-slate-100">

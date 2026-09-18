@@ -84,7 +84,7 @@ class GeminiClassifier:
         self.model_name = settings.gemini_model
         
         if self.api_key:
-            self.client = genai.Client(api_key=self.api_key)
+            self.client = genai.Client(api_key=self.api_key, http_options={'timeout': 10.0})
         else:
             self.client = None
 

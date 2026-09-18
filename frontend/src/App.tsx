@@ -19,14 +19,16 @@ import { Confirmation } from './pages/Confirmation'
 import { Notifications } from './pages/Notifications'
 import AdminAdvisories from './pages/AdminAdvisories'
 import { CivicAlertsPage } from './pages/CivicAlertsPage'
+import { CitizenDashboard } from './pages/CitizenDashboard'
 
 function AppContent() {
   const location = useLocation()
-  const isDashboard = location.pathname.startsWith('/admin')
+  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard'
+  const isHome = location.pathname === '/'
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-emerald-200 flex flex-col">
-      {!isDashboard && <Nav />}
+      {!isDashboard && !isHome && <Nav />}
       <div className="flex-1 flex flex-col min-h-0">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -34,6 +36,7 @@ function AppContent() {
           <Route path="/register" element={<Login register />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/civic-alerts" element={<CivicAlertsPage />} />
+          <Route path="/dashboard" element={<Gate role="citizen"><CitizenDashboard /></Gate>} />
           <Route path="/report" element={<Gate role="citizen"><Report /></Gate>} />
           <Route path="/my-reports" element={<Gate role="citizen"><MyReports /></Gate>} />
           <Route path="/complaints/:id" element={<Gate role="citizen"><Detail /></Gate>} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { AlertTriangle, Clock, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Advisory {
@@ -45,57 +45,61 @@ export default function CivicAlerts() {
     }
   };
 
-  const getCategoryName = (id?: string) => {
-    if (!id) return null;
-    const cat = categories.find(c => c.id === id);
-    return cat ? cat.name : 'Category';
-  };
-
   const getWardName = (id?: string) => {
     if (!id) return 'Global';
     const ward = wards.find(w => w.id === id);
     return ward ? `Ward ${ward.ward_number}` : 'Ward';
   };
 
-  if (alerts.length === 0) return null;
+  if (alerts.length === 0) {
+    return (
+      <div className="bg-white/80 backdrop-blur-md border border-white/60 p-4 rounded-2xl shadow-lg flex items-center justify-between">
+         <div className="flex items-center gap-2">
+            <div className="bg-slate-100 p-1.5 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-slate-400" aria-hidden="true" />
+            </div>
+            <h3 className="text-sm font-semibold text-slate-500">No active alerts</h3>
+         </div>
+         <Link to="/civic-alerts" className="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 transition-colors tracking-wider">
+           View History
+         </Link>
+      </div>
+    );
+  }
 
-  const displayAlerts = alerts.slice(0, 3);
+  const displayAlerts = alerts.slice(0, 2); // Show only 2 in the compact view
 
   return (
-    <div className="bg-amber-50 border-l-4 border-amber-400 p-4 my-6 rounded-r-md shadow-sm">
-      <div className="flex">
-        <div className="flex-shrink-0">
-          <AlertTriangle className="h-5 w-5 text-amber-400" aria-hidden="true" />
+    <div className="bg-white/80 backdrop-blur-md border border-white/60 p-4 rounded-2xl shadow-lg">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="bg-amber-100 p-1.5 rounded-lg flex items-center justify-center animate-pulse">
+          <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
         </div>
-        <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-amber-800">Active Civic Alerts</h3>
-          <div className="mt-2 text-sm text-amber-700">
-            <ul className="space-y-3">
-              {displayAlerts.map((alert) => (
-                <li key={alert.id} className="bg-white/60 p-2 rounded border border-amber-200/50">
-                  <div className="font-bold flex items-center justify-between">
-                    <span>{alert.title}</span>
-                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                      {getWardName(alert.ward_id)}
-                    </span>
-                  </div>
-                  <div className="text-xs mt-1 text-amber-900/80 line-clamp-2">
-                    {alert.description}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-4">
-            <Link
-              to="/civic-alerts"
-              className="text-sm font-medium text-amber-800 hover:text-amber-900 flex items-center"
-            >
-              View All Civic Alerts <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </div>
-        </div>
+        <h3 className="text-sm font-bold text-slate-800">Active Civic Alerts</h3>
       </div>
+
+      <div className="space-y-2 mb-3">
+        {displayAlerts.map((alert) => (
+          <div key={alert.id} className="bg-white/60 p-2.5 rounded-xl border border-amber-200/50 hover:bg-white/80 transition-colors">
+            <div className="flex items-center justify-between mb-1 gap-2">
+              <span className="font-semibold text-xs text-slate-800 line-clamp-1">{alert.title}</span>
+              <span className="text-[10px] font-medium bg-amber-100/80 text-amber-800 px-2 py-0.5 rounded-full whitespace-nowrap">
+                {getWardName(alert.ward_id)}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-600 line-clamp-2 leading-relaxed">
+              {alert.description}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        to="/civic-alerts"
+        className="text-xs font-semibold text-amber-700 hover:text-amber-800 flex items-center gap-1 w-fit group"
+      >
+        View All Civic Alerts <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+      </Link>
     </div>
   );
 }

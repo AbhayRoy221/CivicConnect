@@ -28,7 +28,7 @@ export function Login({ register = false }: { register?: boolean }) {
       login(result.access_token, result.user)
       if (result.user.role === 'administrator') navigate('/admin')
       else if (result.user.role === 'municipal_officer') navigate('/admin')
-      else navigate('/')
+      else navigate('/dashboard')
     } catch (err: Error | any) {
       setError(err.message)
     }
