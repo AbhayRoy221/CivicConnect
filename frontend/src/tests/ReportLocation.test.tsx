@@ -50,15 +50,19 @@ vi.mock('../services/api', () => ({
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
     token: 'mock-token',
-    user: { id: '1', role: 'citizen' }
+    user: { id: '1', role: 'citizen', name: 'John Doe' }
   })
 }))
+
+import { NotificationProvider } from '../context/NotificationContext'
 
 const mockApi = apiService.api as any
 
 const renderWithContext = () => render(
   <BrowserRouter>
-    <Report />
+    <NotificationProvider>
+      <Report />
+    </NotificationProvider>
   </BrowserRouter>
 )
 
@@ -84,6 +88,9 @@ describe('Report Location & UX Flow', () => {
       }
       if (url.includes('/complaints') && !url.includes('check')) {
         return Promise.resolve({ id: '123' }); // submit
+      }
+      if (url.includes('/notifications')) {
+        return Promise.resolve([]);
       }
       return Promise.resolve({});
     });
@@ -332,6 +339,7 @@ describe('Report Location & UX Flow', () => {
     const descInput = screen.getByPlaceholderText(/Add any helpful details/i)
     act(() => { fireEvent.change(descInput, { target: { value: 'Bad road' } }) })
 
+    await waitFor(() => expect(screen.getByText(/Review Report/i)).not.toBeDisabled())
     act(() => { fireEvent.click(screen.getByText(/Review Report/i)) })
 
     await waitFor(() => {
@@ -341,17 +349,27 @@ describe('Report Location & UX Flow', () => {
 
     act(() => { fireEvent.click(screen.getByText('Back')) })
 
-    mockApi.mockResolvedValueOnce({
-      authority: 'PMC',
-      department_name: 'Road Department',
-      geographic_ward_number: 15,
-      administrative_ward_name: 'Aundh-Baner',
-      administrative_zone: '2',
-      assignment_status: 'Ward Office / Manual Triage'
-    })
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes('/check-advisories')) return Promise.resolve({ has_advisory: false, advisories: [] });
+      if (url.includes('/check-related')) return Promise.resolve([]);
+      if (url.includes('/routing-preview')) {
+        return Promise.resolve({
+          authority: 'PMC',
+          department_name: 'Road Department',
+          geographic_ward_number: 15,
+          administrative_ward_name: 'Aundh-Baner',
+          administrative_zone: '2',
+          assignment_status: 'Ward Office / Manual Triage'
+        });
+      }
+      return Promise.resolve({});
+    });
 
     ;(globalAny.fetch as any).mockResolvedValueOnce({ json: async () => ({ display_name: "Pune" }) })
     ;(window as any).simulateMapClick(18.5204, 73.8567)
+
+    // Wait for reverse geocoding to finish so the button is enabled
+    await waitFor(() => expect(screen.getByText(/Review Report/i)).not.toBeDisabled())
 
     act(() => { fireEvent.click(screen.getByText(/Review Report/i)) })
 
@@ -359,7 +377,7 @@ describe('Report Location & UX Flow', () => {
       expect(screen.getByText('Pune Municipal Corporation')).toBeInTheDocument()
       expect(screen.getByText('Road Department')).toBeInTheDocument()
       expect(screen.getByText('Aundh-Baner')).toBeInTheDocument()
-      expect(screen.getByText('2')).toBeInTheDocument()
+      expect(screen.getAllByText('2').length).toBeGreaterThan(0)
       expect(screen.getByText('Ward Office / Manual Triage')).toBeInTheDocument()
     })
   })

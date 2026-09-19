@@ -4,11 +4,15 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import type { Complaint, ResolutionEvidence, ComplaintHistory } from '../types'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useLocation } from 'react-router-dom'
 
 export function Detail() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const isPublicView = searchParams.get('view') === 'public'
   const { token, user } = useAuth()
+  const location = useLocation()
+  const fromPath = location.state?.from || '/my-reports'
   const [complaint, setComplaint] = useState<Complaint | null>(null)
   const [evidence, setEvidence] = useState<ResolutionEvidence[]>([])
   const [timeline, setTimeline] = useState<ComplaintHistory[]>([])
@@ -23,21 +27,27 @@ export function Detail() {
 
   async function load() {
     try {
-      const c = await api<Complaint>(`/complaints/${id}`, token)
-      setComplaint(c)
+      if (isPublicView) {
+        // Public/related view: only fetch sanitized data
+        const c = await api<Complaint>(`/complaints/${id}/public`, token)
+        setComplaint(c)
+      } else {
+        // Owner view: full private data
+        const c = await api<Complaint>(`/complaints/${id}`, token)
+        setComplaint(c)
 
-      const tl = await api<ComplaintHistory[]>(`/complaints/${id}/timeline`, token)
-      setTimeline(tl)
+        const tl = await api<ComplaintHistory[]>(`/complaints/${id}/timeline`, token)
+        setTimeline(tl)
 
-      if (c.resolution_evidence) {
-        setEvidence([c.resolution_evidence])
+        if (c.resolution_evidence) {
+          setEvidence([c.resolution_evidence])
+        }
+
+        try {
+          const rel = await api<any[]>(`/complaints/${id}/related`, token)
+          setRelatedReports(rel)
+        } catch (err) { console.warn("Failed to load related reports") }
       }
-
-      try {
-        const rel = await api<any[]>(`/complaints/${id}/related`, token)
-        setRelatedReports(rel)
-      } catch (err) { console.warn("Failed to load related reports") }
-
     } catch (e: Error | any) {
       alert(e.message)
     }
@@ -74,8 +84,13 @@ export function Detail() {
   return (
     <div className="max-w-2xl mx-auto bg-slate-50 min-h-screen pb-12">
       <div className="bg-white px-6 py-4 shadow-sm border-b border-slate-200 sticky top-0 z-10 flex items-center gap-4">
-        <Link to="/my-reports" className="text-slate-500 hover:text-slate-900 transition-colors">← Back</Link>
+        <Link to={fromPath} className="text-slate-500 hover:text-slate-900 transition-colors">← Back</Link>
         <h1 className="text-xl font-bold text-slate-900 flex-1 truncate">Report {complaint.public_id}</h1>
+        {isPublicView && (
+          <span className="px-3 py-1 text-xs font-bold uppercase rounded-full tracking-wide bg-indigo-100 text-indigo-700 border border-indigo-200">
+            Public View
+          </span>
+        )}
         <span className={`px-3 py-1 text-xs font-bold uppercase rounded-full tracking-wide ${
           isResolved ? 'bg-emerald-100 text-emerald-800' :
           isRejected ? 'bg-red-100 text-red-800' :
@@ -86,12 +101,26 @@ export function Detail() {
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-          <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">{complaint.category_name || 'Uncategorized'}</div>
-          <p className="text-lg text-slate-900 font-medium leading-relaxed">{complaint.description || 'Not reported'}</p>
-          <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between">
-            <span>Reported on {new Date(complaint.created_at).toLocaleDateString()}</span>
-            <span>ID: {complaint.public_id}</span>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          {isPublicView && complaint.image_url && (
+            <div className="w-full bg-slate-100 border-b border-slate-200">
+              <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Reported Issue
+              </div>
+              <img
+                src={complaint.image_url.startsWith('http') ? complaint.image_url : `http://localhost:8000${complaint.image_url}`}
+                alt="Civic Issue"
+                className="w-full h-48 sm:h-64 object-cover"
+              />
+            </div>
+          )}
+          <div className="p-5">
+            <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">{complaint.category_name || 'Uncategorized'}</div>
+            {!isPublicView && <p className="text-lg text-slate-900 font-medium leading-relaxed">{complaint.description || 'Not reported'}</p>}
+            <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500 flex justify-between">
+              <span>Reported on {new Date(complaint.created_at).toLocaleDateString()}</span>
+              <span>ID: {complaint.public_id}</span>
+            </div>
           </div>
         </div>
 
@@ -124,16 +153,18 @@ export function Detail() {
                 <div className="text-slate-500 text-xs mb-1">Department</div>
                 <div className="font-semibold text-slate-900">{complaint.department_name || 'Not determined'}</div>
               </div>
-              <div>
-                <div className="text-slate-500 text-xs mb-1">Assigned Officer</div>
-                <div className="font-semibold text-slate-900">
-                  {complaint.officer_name ? (
-                    <span className="text-emerald-700">Demo Officer: {complaint.officer_name}</span>
-                  ) : (
-                    <span className="text-amber-600">Awaiting municipal assignment</span>
-                  )}
+              {!isPublicView && (
+                <div>
+                  <div className="text-slate-500 text-xs mb-1">Assigned Officer</div>
+                  <div className="font-semibold text-slate-900">
+                    {complaint.officer_name ? (
+                      <span className="text-emerald-700">Demo Officer: {complaint.officer_name}</span>
+                    ) : (
+                      <span className="text-amber-600">Awaiting municipal assignment</span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -143,35 +174,53 @@ export function Detail() {
               <span>📍</span> Location Details
             </h2>
             <div className="space-y-4 text-sm">
-              <div>
-                <div className="text-slate-500 text-xs mb-1">Address</div>
-                <div className="font-semibold text-slate-900 line-clamp-2">{complaint.address || 'Coordinates Only'}</div>
-              </div>
-              <div className="flex gap-4">
-                <div>
-                  <div className="text-slate-500 text-xs mb-1">Geographic Ward</div>
-                  <div className="font-mono text-slate-900">{complaint.geographic_ward_number || 'N/A'}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500 text-xs mb-1">Admin Ward</div>
-                  <div className="font-mono text-slate-900">{complaint.administrative_ward_office || complaint.administrative_ward_name || 'N/A'}</div>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-slate-100">
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${complaint.latitude},${complaint.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 hover:text-indigo-800 font-semibold text-xs flex items-center gap-1"
-                >
-                  View on Google Maps ↗
-                </a>
-              </div>
+              {isPublicView ? (
+                <>
+                  <div className="flex gap-4">
+                    <div>
+                      <div className="text-slate-500 text-xs mb-1">Geographic Ward</div>
+                      <div className="font-mono text-slate-900">{complaint.geographic_ward_number || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs mb-1">Admin Ward</div>
+                      <div className="font-mono text-slate-900">{complaint.administrative_ward_office || complaint.administrative_ward_name || 'N/A'}</div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <div className="text-slate-500 text-xs mb-1">Address</div>
+                    <div className="font-semibold text-slate-900 line-clamp-2">{complaint.address || 'Coordinates Only'}</div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div>
+                      <div className="text-slate-500 text-xs mb-1">Geographic Ward</div>
+                      <div className="font-mono text-slate-900">{complaint.geographic_ward_number || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs mb-1">Admin Ward</div>
+                      <div className="font-mono text-slate-900">{complaint.administrative_ward_office || complaint.administrative_ward_name || 'N/A'}</div>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${complaint.latitude},${complaint.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold text-xs flex items-center gap-1"
+                    >
+                      View on Google Maps ↗
+                    </a>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Resolution Evidence */}
+        {/* Resolution Evidence — hidden in public view */}
+        {!isPublicView && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-slate-50">
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -209,9 +258,10 @@ export function Detail() {
             )}
           </div>
         </div>
+        )}
 
-        {/* Dispute / Appeal Section */}
-        {user?.role === 'citizen' && (isResolved || isRejected) && !complaint.is_escalated && (
+        {/* Dispute / Appeal Section — hidden in public view */}
+        {!isPublicView && user?.role === 'citizen' && (isResolved || isRejected) && !complaint.is_escalated && (
           <div className={`bg-white rounded-2xl shadow-sm border p-5 ${isRejected ? 'border-orange-200' : 'border-red-200'}`}>
             <h3 className={`font-bold mb-2 ${isRejected ? 'text-orange-700' : 'text-red-700'}`}>
               {isRejected ? 'Disagree with rejection?' : 'Not fixed properly?'}
@@ -293,7 +343,7 @@ export function Detail() {
                     <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
                       <strong>Reasons:</strong> {r.match_reasons.join(' • ')}
                     </div>
-                    <a href={`/complaints/${r.public_id}`} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs font-bold bg-white border border-slate-300 text-slate-700 py-1.5 rounded hover:bg-slate-50 transition-colors">
+                    <a href={`/complaints/${r.public_id}?view=public`} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs font-bold bg-white border border-slate-300 text-slate-700 py-1.5 rounded hover:bg-slate-50 transition-colors">
                       View Complaint &rarr;
                     </a>
                   </div>

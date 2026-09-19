@@ -39,6 +39,7 @@ from app.schemas import (
     CategoryResponse,
     ComplaintResponse,
     DepartmentResponse,
+    PublicComplaintResponse,
     DisputeRequest,
     DuplicateResponse,
     HotspotResponse,
@@ -542,6 +543,30 @@ async def complaint_detail(complaint_ref: str, current_user: User = Depends(get_
     if not _can_view(current_user, complaint):
         raise HTTPException(status_code=403, detail="You cannot access this complaint")
     return await _complaint_response(session, complaint)
+
+
+@router.get("/complaints/{complaint_ref}/public", response_model=PublicComplaintResponse)
+async def complaint_public_view(complaint_ref: str, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    """Sanitized public view of any complaint. Requires authentication but not ownership."""
+    complaint = await _get_complaint(session, complaint_ref)
+    category = await session.get(Category, complaint.category_id) if complaint.category_id else None
+    department = await session.get(Department, complaint.department_id) if complaint.department_id else None
+    return PublicComplaintResponse(
+        public_id=complaint.public_id,
+        category_name=category.name if category else None,
+        status=complaint.status,
+        created_at=complaint.created_at,
+        updated_at=complaint.updated_at,
+        resolved_at=complaint.resolved_at,
+        ward_name=complaint.ward_name,
+        geographic_ward_number=complaint.geographic_ward_number,
+        administrative_ward_office=complaint.administrative_ward_office,
+        administrative_ward_name=complaint.administrative_ward_name,
+        administrative_zone=complaint.administrative_zone,
+        department_name=department.name if department else None,
+        authority=department.authority.value if department else None,
+        image_url=complaint.image_url,
+    )
 
 
 @router.get("/complaints/{complaint_ref}/timeline")

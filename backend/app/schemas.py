@@ -98,6 +98,26 @@ class ResolutionEvidenceResponse(BaseModel):
     created_at: datetime
 
 
+class PublicComplaintResponse(BaseModel):
+    """Sanitized public view of a complaint — no private citizen/officer data."""
+    public_id: str
+    category_name: str | None = None
+    status: ComplaintStatus
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None = None
+
+    # Approximate location and routing info only
+    ward_name: str | None = None
+    geographic_ward_number: int | None = None
+    administrative_ward_office: str | None = None
+    administrative_ward_name: str | None = None
+    administrative_zone: str | None = None
+    department_name: str | None = None
+    authority: str | None = None
+    image_url: str | None = None
+
+
 class ComplaintResponse(BaseModel):
     id: UUID
     public_id: str

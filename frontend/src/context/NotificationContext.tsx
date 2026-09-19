@@ -68,7 +68,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length
+  const unreadCount = (Array.isArray(notifications) ? notifications : []).filter(n => !n.is_read).length
 
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markRead, markAllRead, refreshNotifications }}>

@@ -23,7 +23,7 @@ import { CitizenDashboard } from './pages/CitizenDashboard'
 
 function AppContent() {
   const location = useLocation()
-  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard'
+  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard' || location.pathname === '/report'
   const isHome = location.pathname === '/'
 
   return (
