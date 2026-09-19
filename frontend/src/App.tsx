@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, Gate } from './context/AuthContext'
 import { Nav } from './components/Nav'
@@ -23,7 +23,7 @@ import { CitizenDashboard } from './pages/CitizenDashboard'
 
 function AppContent() {
   const location = useLocation()
-  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard' || location.pathname === '/report' || location.pathname === '/my-reports'
+  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard' || location.pathname === '/report' || location.pathname === '/my-reports' || location.pathname === '/civic-alerts'
   const isHome = location.pathname === '/'
 
   return (
@@ -35,7 +35,7 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Login register />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/civic-alerts" element={<CivicAlertsPage />} />
+          <Route path="/civic-alerts" element={<Gate role="citizen"><CivicAlertsPage /></Gate>} />
           <Route path="/dashboard" element={<Gate role="citizen"><CitizenDashboard /></Gate>} />
           <Route path="/report" element={<Gate role="citizen"><Report /></Gate>} />
           <Route path="/my-reports" element={<Gate role="citizen"><MyReports /></Gate>} />

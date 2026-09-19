@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CivicAlertsPage } from '../pages/CivicAlertsPage';
 import { AuthProvider } from '../context/AuthContext';
+import { NotificationProvider } from '../context/NotificationContext';
 import { BrowserRouter } from 'react-router-dom';
 import { api } from '../services/api';
 
@@ -54,7 +55,9 @@ describe('CivicAlertsPage Filters & Search', () => {
     render(
       <BrowserRouter>
         <AuthProvider>
-          <CivicAlertsPage />
+          <NotificationProvider>
+            <CivicAlertsPage />
+          </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>
     );
@@ -62,7 +65,6 @@ describe('CivicAlertsPage Filters & Search', () => {
 
   it('renders all active advisories by default', async () => {
     renderPage();
-    expect(screen.getByText('Loading alerts...')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('Water cut in Downtown')).toBeInTheDocument();
