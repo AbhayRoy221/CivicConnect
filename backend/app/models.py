@@ -69,6 +69,7 @@ class User(Base):
     department_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("departments.id"), index=True)
     ward_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pune_wards.id"), index=True)
     language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
+    is_test_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

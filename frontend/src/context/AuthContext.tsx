@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import type { User } from '../types'
 import { api } from '../services/api'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 
 type AuthContextType = {
   token: string | null
@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (token) {
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(null)
           setUser(null)
           localStorage.removeItem('token')
+          navigate('/login')
         },
       }}
     >

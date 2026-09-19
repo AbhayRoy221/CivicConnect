@@ -1,4 +1,4 @@
-﻿import React from 'react'
+import React from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, Gate } from './context/AuthContext'
 import { Nav } from './components/Nav'
@@ -23,7 +23,7 @@ import { CitizenDashboard } from './pages/CitizenDashboard'
 
 function AppContent() {
   const location = useLocation()
-  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard' || location.pathname === '/report' || location.pathname === '/my-reports' || location.pathname === '/civic-alerts'
+  const isDashboard = location.pathname.startsWith('/admin') || location.pathname === '/dashboard' || location.pathname === '/report' || location.pathname === '/my-reports' || location.pathname === '/civic-alerts' || location.pathname === '/leaderboard'
   const isHome = location.pathname === '/'
 
   return (

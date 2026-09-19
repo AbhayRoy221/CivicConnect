@@ -1103,21 +1103,49 @@ async def my_rewards(current_user: User = Depends(get_current_user), session: As
 
 @router.get("/leaderboard", response_model=list[LeaderboardEntry])
 async def leaderboard(session: AsyncSession = Depends(get_session)):
+    rewards_subq = (
+        select(
+            Reward.user_id.label("user_id"),
+            func.coalesce(func.sum(Reward.points), 0).label("total_points")
+        )
+        .group_by(Reward.user_id)
+        .subquery()
+    )
+
+    complaints_subq = (
+        select(
+            Complaint.citizen_id.label("user_id"),
+            func.count(Complaint.id).label("resolved_count")
+        )
+        .where(Complaint.status == ComplaintStatus.RESOLVED)
+        .group_by(Complaint.citizen_id)
+        .subquery()
+    )
+
     query = (
         select(
+            User.id.label("user_id"),
             User.name.label("user_name"),
-            func.coalesce(func.sum(Reward.points), 0).label("points"),
-            func.count(Complaint.id).label("complaints_resolved"),
+            func.coalesce(rewards_subq.c.total_points, 0).label("points"),
+            func.coalesce(complaints_subq.c.resolved_count, 0).label("complaints_resolved"),
         )
-        .join(Reward, Reward.user_id == User.id, isouter=True)
-        .join(Complaint, (Complaint.citizen_id == User.id) & (Complaint.status == ComplaintStatus.RESOLVED), isouter=True)
+        .join(rewards_subq, rewards_subq.c.user_id == User.id, isouter=True)
+        .join(complaints_subq, complaints_subq.c.user_id == User.id, isouter=True)
         .where(User.role == UserRole.CITIZEN)
-        .group_by(User.id, User.name)
-        .order_by(func.coalesce(func.sum(Reward.points), 0).desc(), User.name)
+        .where(User.is_test_account == False)
+        .order_by(func.coalesce(rewards_subq.c.total_points, 0).desc(), User.name)
         .limit(10)
     )
     result = await session.execute(query)
-    return [LeaderboardEntry(user_name=row.user_name, points=int(row.points), complaints_resolved=int(row.complaints_resolved)) for row in result.all()]
+    return [
+        LeaderboardEntry(
+            user_id=row.user_id,
+            user_name=row.user_name,
+            points=int(row.points),
+            complaints_resolved=int(row.complaints_resolved)
+        )
+        for row in result.all()
+    ]
 
 @router.get("/admin/complaints/map", response_model=list[MapComplaintResponse])
 async def admin_map_complaints(

@@ -315,6 +315,7 @@ class UserRewardsSummary(BaseModel):
 
 
 class LeaderboardEntry(BaseModel):
+    user_id: UUID
     user_name: str
     points: int
     complaints_resolved: int
