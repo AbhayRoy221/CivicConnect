@@ -13,7 +13,7 @@ export function Nav() {
       <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
         <Link to="/" className="font-bold text-lg text-emerald-600 flex items-center gap-2">
           <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center">🌿</div>
-          CivicConnect
+          NagarMitra
         </Link>
         {user ? (
           <NavUserActions user={user} logout={logout} token={token} />

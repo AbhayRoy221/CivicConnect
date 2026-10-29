@@ -7,6 +7,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import type { AIAnalysisResponse, RoutingPreview } from '../types'
 import AdvisoryModal from '../components/AdvisoryModal'
+import { Check } from 'lucide-react'
 import { CitizenLayout } from '../components/CitizenLayout'
 
 const VALID_CATEGORIES = [
@@ -647,22 +648,105 @@ export function Report() {
             </div>
           </div>
 
-          <div className="mb-6 md:mb-8 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between relative">
-            <div className="absolute top-1/2 left-8 right-8 h-1 bg-slate-100 -translate-y-1/2 z-0 hidden md:block rounded-full"></div>
+          {/* Step Progress Indicators */}
+          <div className="mb-6 md:mb-8 bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+            <div className="relative">
+              {/* Connecting progress line - centered on the 40px (h-10) indicator circles at top-5 (20px) */}
+              <div className="absolute top-5 left-[16.666%] right-[16.666%] h-1 bg-slate-200 -translate-y-1/2 z-0 rounded-full">
+                {/* Active progress fill */}
+                <div
+                  className="h-full bg-emerald-600 rounded-full transition-all duration-300"
+                  style={{
+                    width: step === 1 ? '0%' : step === 2 ? '50%' : '100%'
+                  }}
+                />
+              </div>
 
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${step >= 1 ? 'bg-emerald-600 text-white' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>1</div>
-              <span className={`text-xs font-bold uppercase tracking-wider ${step >= 1 ? 'text-emerald-900' : 'text-slate-400'}`}>Upload Photo</span>
-            </div>
+              {/* 3-column grid for consistent alignment on desktop, tablet, and mobile */}
+              <div className="relative z-10 grid grid-cols-3">
+                {/* Step 1 */}
+                {step > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    aria-label="Go back to Step 1: Upload Photo"
+                    className="flex flex-col items-center text-center cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-xl"
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 bg-emerald-600 text-white ring-4 ring-emerald-500/20 group-hover:bg-emerald-700">
+                      1
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider mt-2 text-emerald-900 group-hover:underline">
+                      Upload Photo
+                    </span>
+                  </button>
+                ) : (
+                  <div
+                    className="flex flex-col items-center text-center"
+                    aria-current={step === 1 ? 'step' : undefined}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-md">
+                      1
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider mt-2 text-emerald-900">
+                      Upload Photo
+                    </span>
+                  </div>
+                )}
 
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${step >= 2 ? 'bg-emerald-600 text-white' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>2</div>
-              <span className={`text-xs font-bold uppercase tracking-wider ${step >= 2 ? 'text-emerald-900' : 'text-slate-400'}`}>Location</span>
-            </div>
+                {/* Step 2 */}
+                {step > 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    aria-label="Go back to Step 2: Location"
+                    className="flex flex-col items-center text-center cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-xl"
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 bg-emerald-600 text-white ring-4 ring-emerald-500/20 group-hover:bg-emerald-700">
+                      2
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider mt-2 text-emerald-900 group-hover:underline">
+                      Location
+                    </span>
+                  </button>
+                ) : (
+                  <div
+                    className="flex flex-col items-center text-center"
+                    aria-current={step === 2 ? 'step' : undefined}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 ${
+                      step >= 2
+                        ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-md'
+                        : 'bg-white border-2 border-slate-300 text-slate-400'
+                    }`}>
+                      2
+                    </div>
+                    <span className={`text-xs font-bold uppercase tracking-wider mt-2 transition-colors ${
+                      step >= 2 ? 'text-emerald-900' : 'text-slate-400'
+                    }`}>
+                      Location
+                    </span>
+                  </div>
+                )}
 
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-colors ${step >= 3 ? 'bg-emerald-600 text-white' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>3</div>
-              <span className={`text-xs font-bold uppercase tracking-wider ${step >= 3 ? 'text-emerald-900' : 'text-slate-400'}`}>Review</span>
+                {/* Step 3 */}
+                <div
+                  className="flex flex-col items-center text-center"
+                  aria-current={step === 3 ? 'step' : undefined}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-200 ${
+                    step === 3
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-md'
+                      : 'bg-white border-2 border-slate-300 text-slate-400'
+                  }`}>
+                    3
+                  </div>
+                  <span className={`text-xs font-bold uppercase tracking-wider mt-2 transition-colors ${
+                    step >= 3 ? 'text-emerald-900' : 'text-slate-400'
+                  }`}>
+                    Review
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 

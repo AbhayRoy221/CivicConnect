@@ -53,7 +53,7 @@ export function Home() {
               </div>
             </div>
           </header>
-          
+
           <div className="flex flex-col justify-center space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-sm w-fit">
               <span className="w-4 h-2.5 flex flex-col justify-between overflow-hidden rounded-[2px] border border-slate-300 shadow-sm">
@@ -120,7 +120,7 @@ export function Home() {
                 </div>
               </div>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-4 pt-4">
             <Link to="/report" className="bg-white/88 backdrop-blur-md p-4 rounded-2xl border border-white/80 shadow-md flex items-center justify-between group">
               <div className="flex items-center gap-3.5">
@@ -157,19 +157,19 @@ export function Home() {
   }
 
   return (
-    <div 
+    <div
       className="w-full overflow-hidden bg-[#f8fafc] flex justify-center font-[Plus Jakarta Sans]"
       style={{ height: 1024 * scale }}
     >
-      <div 
+      <div
         className="relative origin-top flex justify-center"
         style={{ transform: `scale(${scale})`, width: 1536, height: 1024 }}
       >
         <div className="relative w-[1536px] h-[1024px] bg-slate-950 overflow-hidden shadow-2xl">
           {/* Layer 0: Background Layer */}
-          <img 
-            src="/assets/home/nagarmitra-india-bg.png" 
-            alt="NagarMitra India Background" 
+          <img
+            src="/assets/home/nagarmitra-india-bg.png"
+            alt="NagarMitra India Background"
             className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           />
 
@@ -189,7 +189,7 @@ export function Home() {
                 <span className="text-[11px] font-semibold text-slate-600 tracking-normal mt-0.5">Smarter Civic Response</span>
               </div>
             </div>
-            
+
             <nav className="flex items-center gap-8 ml-8">
               <Link to="/" className="relative text-[15px] font-bold text-slate-900 pb-1">
                 Home
@@ -200,19 +200,19 @@ export function Home() {
               <Link to="/civic-alerts" className="text-[15px] font-medium text-slate-700 hover:text-emerald-800 transition">Civic Alerts</Link>
               <span className="text-[15px] font-medium text-slate-700 cursor-not-allowed">About</span>
             </nav>
-            
+
             <div className="flex items-center gap-3.5">
-              <div className="relative w-64">
-                <input 
-                  type="text" 
-                  placeholder="Search issues, cities or locations..." 
-                  className="w-full bg-white/90 text-xs pl-8 pr-3 py-2 rounded-lg border border-slate-200/90 shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-600 text-slate-700 placeholder-slate-400" 
+              <div className="relative w-72">
+                <input
+                  type="text"
+                  placeholder="Search issues, cities or locations..."
+                  className="w-full bg-white/95 text-xs pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200/90 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-slate-700 placeholder:text-slate-400 font-medium transition"
                 />
-                <svg className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2"></path>
                 </svg>
               </div>
-              
+
               {!user ? (
                 <>
                   <Link to="/login" className="bg-white/95 hover:bg-white text-slate-800 text-xs font-bold px-4 py-2 rounded-lg border border-slate-200 shadow-sm transition">Login</Link>
@@ -242,17 +242,17 @@ export function Home() {
               </span>
               <span className="text-[12px] font-semibold text-slate-700 tracking-tight">Safer Cities. Stronger Communities. A Cleaner India.</span>
             </div>
-            
+
             <h1 className="text-[58px] font-black leading-[1.04] tracking-tight text-slate-900 mb-4">
               A Cleaner,<br/>
               Safer, Stronger<br/>
               <span className="text-[#E66A1F]">India</span> <span className="text-[#0E7C4B]">Together</span>
             </h1>
-            
+
             <p className="text-[15px] font-medium text-slate-700 leading-relaxed max-w-[430px] mb-6">
               Report civic issues, track progress, and be part of a smarter, cleaner and more livable India.
             </p>
-            
+
             <div className="flex items-center gap-3.5 mb-7">
               <Link to="/report" className="flex items-center gap-2.5 bg-[#0B6737] hover:bg-[#09532c] text-white font-bold text-sm px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition">
                 <span>Report an Issue</span>
@@ -261,7 +261,7 @@ export function Home() {
                 </svg>
               </Link>
             </div>
-            
+
             {/* Capability Strip replacing Fake Stats */}
             <div className="bg-white/88 backdrop-blur-[12px] rounded-xl px-4 py-2.5 flex items-center justify-between shadow-sm border border-white/80 max-w-[460px]">
               <div className="flex items-center gap-2.5">
@@ -328,7 +328,7 @@ export function Home() {
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">Delhi</div>
             </div>
           </div>
-          
+
           {/* Indore Pin */}
           <div className="absolute top-[220px] left-[665px] z-20 flex items-center gap-2.5 bg-white/94 backdrop-blur-[8px] px-2 py-1.5 rounded-xl shadow-[0_8px_20px_-4px_rgba(0,0,0,0.15)] border border-white/90">
             <div className="w-10 h-9 rounded-lg overflow-hidden bg-slate-200 relative shrink-0">
@@ -342,7 +342,7 @@ export function Home() {
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">Indore</div>
             </div>
           </div>
-          
+
           {/* Guwahati Pin */}
           <div className="absolute top-[228px] left-[1020px] z-20 flex items-center gap-2.5 bg-white/94 backdrop-blur-[8px] px-2 py-1.5 rounded-xl shadow-[0_8px_20px_-4px_rgba(0,0,0,0.15)] border border-white/90">
             <div className="w-10 h-9 rounded-lg overflow-hidden bg-slate-200 relative shrink-0">
@@ -356,7 +356,7 @@ export function Home() {
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">Guwahati</div>
             </div>
           </div>
-          
+
           {/* Bengaluru Pin */}
           <div className="absolute top-[345px] left-[820px] z-20 flex items-center gap-2.5 bg-white/94 backdrop-blur-[8px] px-2 py-1.5 rounded-xl shadow-[0_8px_20px_-4px_rgba(0,0,0,0.15)] border border-white/90">
             <div className="w-10 h-9 rounded-lg overflow-hidden bg-slate-200 relative shrink-0">
@@ -376,7 +376,7 @@ export function Home() {
               Stronger<br/>Cities<br/>Brighter<br/>India
             </p>
           </div>
-          
+
           <div className="absolute top-[620px] left-[1075px] z-20 bg-[#0B5E38] text-white px-3.5 py-2 rounded-lg border-2 border-white shadow-xl flex items-center gap-2">
             <div className="text-left font-bold text-[10px] tracking-wider leading-tight">
               <div>CLEANER</div>
@@ -454,7 +454,7 @@ export function Home() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"></path></svg>
                 </div>
               </Link>
-              
+
               <Link to={user?.role === 'citizen' ? '/my-reports' : (user ? '/admin' : '/login')} className="bg-white/88 backdrop-blur-[12px] shadow-sm border border-white/80 rounded-2xl p-4 flex items-center justify-between hover:bg-white/95 transition group">
                 <div className="flex items-center gap-3.5">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-100/90 text-emerald-700 flex items-center justify-center shrink-0">
@@ -516,14 +516,14 @@ export function Home() {
             </span>
             <div className="w-24 h-1 mt-1.5 rounded-full bg-gradient-to-r from-[#FF9933] via-white to-[#138808] shadow-sm"></div>
           </div>
-          
+
           <div className="absolute bottom-[56px] right-[48px] z-50 flex flex-col items-start select-none -rotate-2">
             <p className="font-[Caveat] text-xl font-black text-slate-800 leading-tight drop-shadow-sm">
               Ek Saaf<br/>Ek Surakshit<br/>Ek Samruddh<br/>Bharat
             </p>
             <div className="w-28 h-1.5 mt-1 rounded-full bg-gradient-to-r from-[#FF9933] via-white to-[#138808] shadow-sm"></div>
           </div>
-          
+
         </div>
       </div>
     </div>

@@ -19,7 +19,9 @@ import {
   Clock,
   ArrowRight,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 // Fix Leaflet default icon issues
@@ -57,6 +59,13 @@ export function MyReports() {
   const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'In Progress' | 'Resolved'>('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 5
+
+  // Reset page when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, searchQuery, sortOrder])
 
   useEffect(() => {
     if (!token) return
@@ -120,6 +129,23 @@ export function MyReports() {
 
     return result
   }, [complaints, activeTab, searchQuery, sortOrder])
+
+  // Pagination calculation (5 per page)
+  const totalReports = filteredComplaints.length
+  const totalPages = Math.max(1, Math.ceil(totalReports / PAGE_SIZE))
+  const validCurrentPage = Math.min(Math.max(currentPage, 1), totalPages)
+
+  // Ensure currentPage is clamped if data/filters change
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  const paginatedComplaints = useMemo(() => {
+    const start = (validCurrentPage - 1) * PAGE_SIZE
+    return filteredComplaints.slice(start, start + PAGE_SIZE)
+  }, [filteredComplaints, validCurrentPage, PAGE_SIZE])
 
   // Get Map Center (Fallback to Pune if no reports have coordinates)
   const mapCenter: [number, number] = useMemo(() => {
@@ -233,47 +259,69 @@ export function MyReports() {
             {/* LEFT COLUMN: LIST */}
             <div className="space-y-6">
 
-              {/* Toolbar: Filters & Sort */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Toolbar: Filters, Search & Sort */}
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  {/* Tabs */}
+                  <div className="flex gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar">
+                    {tabs.map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => setActiveTab(t.key)}
+                        className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                          activeTab === t.key
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                        }`}
+                      >
+                        {t.label} {t.count > 0 && <span className="ml-1 opacity-80 text-xs">({t.count})</span>}
+                      </button>
+                    ))}
+                  </div>
 
-                {/* Tabs */}
-                <div className="flex gap-2 p-1 bg-slate-100/80 rounded-2xl border border-slate-200 w-full sm:w-auto overflow-x-auto no-scrollbar">
-                  {tabs.map(t => (
-                    <button
-                      key={t.key}
-                      onClick={() => setActiveTab(t.key)}
-                      className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                        activeTab === t.key
-                          ? 'bg-emerald-700 text-white shadow-md'
-                          : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                      }`}
+                  {/* Sort */}
+                  <div className="shrink-0 w-full md:w-44">
+                    <select
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+                      className="bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 w-full shadow-2xs"
                     >
-                      {t.label} {t.count > 0 && <span className="opacity-80">({t.count})</span>}
-                    </button>
-                  ))}
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                    </select>
+                  </div>
                 </div>
 
-                {/* Sort */}
-                <div className="flex items-center shrink-0 ml-auto w-full sm:w-auto">
-                  <select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
-                    className="bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full"
-                  >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                  </select>
+                {/* Search Bar with generous spacing */}
+                <div className="relative w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search reports by title, ID, address or description..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-11 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center font-bold transition"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* LIST OF COMPLAINTS */}
               <div className="space-y-4">
-                {filteredComplaints.length === 0 ? (
+                {totalReports === 0 ? (
                   <div className="py-12 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
                     No reports found matching this filter.
                   </div>
                 ) : (
-                  filteredComplaints.map(c => (
+                  paginatedComplaints.map(c => (
                     <div key={c.id} className="bg-white rounded-[24px] border border-slate-200 p-5 flex flex-col sm:flex-row gap-5 hover:shadow-lg hover:border-emerald-200 transition-all duration-300 items-start sm:items-center">
 
                       {/* Image Thumbnail */}
@@ -329,6 +377,64 @@ export function MyReports() {
 
                     </div>
                   ))
+                )}
+
+                {/* PAGINATION / PAGE SECTION (5 per page) */}
+                {totalReports > 0 && totalPages > 1 && (
+                  <div className="pt-4">
+                    {/* Pagination Bar with Page Numbers */}
+                      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                        <div className="text-xs font-semibold text-slate-500">
+                          Showing <span className="text-slate-800 font-bold">{(validCurrentPage - 1) * PAGE_SIZE + 1}</span>–<span className="text-slate-800 font-bold">{Math.min(validCurrentPage * PAGE_SIZE, totalReports)}</span> of <span className="text-slate-800 font-bold">{totalReports}</span> reports • Page <span className="text-slate-800 font-bold">{validCurrentPage}</span> of <span className="text-slate-800 font-bold">{totalPages}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {/* Previous Page */}
+                          <button
+                            onClick={() => {
+                              setCurrentPage(prev => Math.max(prev - 1, 1))
+                              window.scrollTo({ top: 350, behavior: 'smooth' })
+                            }}
+                            disabled={validCurrentPage === 1}
+                            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            title="Previous Page"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+
+                          {/* Page Numbers */}
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                              key={page}
+                              onClick={() => {
+                                setCurrentPage(page)
+                                window.scrollTo({ top: 350, behavior: 'smooth' })
+                              }}
+                              className={`w-9 h-9 rounded-xl text-xs font-bold transition ${
+                                validCurrentPage === page
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+
+                          {/* Next Page */}
+                          <button
+                            onClick={() => {
+                              setCurrentPage(prev => Math.min(prev + 1, totalPages))
+                              window.scrollTo({ top: 350, behavior: 'smooth' })
+                            }}
+                            disabled={validCurrentPage === totalPages}
+                            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            title="Next Page"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                  </div>
                 )}
               </div>
             </div>

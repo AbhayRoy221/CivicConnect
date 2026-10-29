@@ -164,11 +164,11 @@ export function CitizenLayout({ children }: CitizenLayoutProps) {
 
           {/* Search bar */}
           <div className="w-full max-w-md relative hidden md:block">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none shrink-0" />
             <input
               type="text"
               placeholder="Search your reports, issues or locations..."
-              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition placeholder:text-slate-400 text-slate-700"
+              className="w-full pl-11 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition placeholder:text-slate-400 text-slate-700"
             />
           </div>
 
